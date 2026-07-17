@@ -17,6 +17,8 @@ app.use(express.json({ limit: '50mb' }));
 
 // Servir arquivos estáticos do React em produção
 app.use(express.static(path.join(__dirname, 'dist')));
+// Servir a pasta de imagens assets diretamente
+app.use('/assets', express.static(path.join(__dirname, 'assets')));
 
 // Banco de dados Mock Padrão Inicial
 const DEFAULT_DB = {
