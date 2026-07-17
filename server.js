@@ -250,6 +250,8 @@ app.post('/api/integration/logs/clear', (req, res) => {
     } catch (e) {
         res.status(500).json({ error: "Erro ao limpar logs" });
     }
+});
+
 // Endpoint para Autenticação (Login)
 app.post('/api/auth/login', (req, res) => {
     const { email, password } = req.body;
