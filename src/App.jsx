@@ -444,6 +444,17 @@ function App() {
         alert(`Venda recebida via Integração! O produto "${saleData.productName}" foi importado automaticamente com imagem e ficha técnica provisória.`);
     };
 
+    if (!currentUser) {
+        return <LoginScreenView onLoginSuccess={setCurrentUser} />;
+    }
+
+    const isAdmin = currentUser.role === 'admin';
+
+    // Se um funcionário tentar acessar uma aba restrita, redireciona para a dashboard
+    if (!isAdmin && (activeTab === 'channels' || activeTab === 'integrations' || activeTab === 'expenses')) {
+        setActiveTab('dashboard');
+    }
+
     return (
         <div className={`flex min-h-screen ${theme === 'light' ? 'bg-[#F3F4F6] text-[#1F2937]' : 'bg-brand-darkBg text-white'}`}>
             {/* --- SIDEBAR --- */}
@@ -478,13 +489,15 @@ function App() {
                             <span className="font-semibold">Produtos</span>
                         </button>
 
-                        <button 
-                            onClick={() => setActiveTab('channels')}
-                            className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-200 ${activeTab === 'channels' ? 'bg-gradient-to-r from-brand-orange/20 to-transparent border-l-4 border-brand-orange text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
-                        >
-                            <Sliders className="w-5 h-5" />
-                            <span className="font-semibold">Taxas e Canais</span>
-                        </button>
+                        {isAdmin && (
+                            <button 
+                                onClick={() => setActiveTab('channels')}
+                                className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-200 ${activeTab === 'channels' ? 'bg-gradient-to-r from-brand-orange/20 to-transparent border-l-4 border-brand-orange text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                            >
+                                <Sliders className="w-5 h-5" />
+                                <span className="font-semibold">Taxas e Canais</span>
+                            </button>
+                        )}
 
                         <button 
                             onClick={() => setActiveTab('pricing')}
@@ -494,13 +507,15 @@ function App() {
                             <span className="font-semibold">Precificação</span>
                         </button>
 
-                        <button 
-                            onClick={() => setActiveTab('integrations')}
-                            className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-200 ${activeTab === 'integrations' ? 'bg-gradient-to-r from-brand-orange/20 to-transparent border-l-4 border-brand-orange text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
-                        >
-                            <Bolt className="w-5 h-5" />
-                            <span className="font-semibold">Integrações</span>
-                        </button>
+                        {isAdmin && (
+                            <button 
+                                onClick={() => setActiveTab('integrations')}
+                                className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-200 ${activeTab === 'integrations' ? 'bg-gradient-to-r from-brand-orange/20 to-transparent border-l-4 border-brand-orange text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                            >
+                                <Bolt className="w-5 h-5" />
+                                <span className="font-semibold">Integrações</span>
+                            </button>
+                        )}
 
                         <button 
                             onClick={() => setActiveTab('reports')}
@@ -526,19 +541,30 @@ function App() {
                             <span className="font-semibold">Estoque</span>
                         </button>
 
-                        <button 
-                            onClick={() => setActiveTab('expenses')}
-                            className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-200 ${activeTab === 'expenses' ? 'bg-gradient-to-r from-brand-orange/20 to-transparent border-l-4 border-brand-orange text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
-                        >
-                            <Wallet className="w-5 h-5" />
-                            <span className="font-semibold">Despesas Adm.</span>
-                        </button>
+                        {isAdmin && (
+                            <button 
+                                onClick={() => setActiveTab('expenses')}
+                                className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-200 ${activeTab === 'expenses' ? 'bg-gradient-to-r from-brand-orange/20 to-transparent border-l-4 border-brand-orange text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                            >
+                                <Wallet className="w-5 h-5" />
+                                <span className="font-semibold">Despesas Adm.</span>
+                            </button>
+                        )}
                     </nav>
                 </div>
 
-                <div className="pt-6 border-t border-brand-borderBg text-center">
-                    <p className="text-xs text-gray-500">Desenvolvido para</p>
-                    <p className="text-xs font-bold text-brand-yellow">Printou Studio 3D</p>
+                <div className="pt-6 border-t border-brand-borderBg flex flex-col items-center gap-2">
+                    <div className="text-center">
+                        <p className="text-[10px] text-gray-500">Usuário Ativo</p>
+                        <p className="text-xs font-bold text-white">{currentUser?.name}</p>
+                        <p className="text-[9px] text-brand-orange uppercase font-bold tracking-wider">{currentUser?.role === 'admin' ? 'Administrador' : 'Funcionário'}</p>
+                    </div>
+                    <button 
+                        onClick={handleLogout}
+                        className="text-xs text-rose-400 hover:text-rose-300 font-bold underline cursor-pointer mt-1"
+                    >
+                        Sair da Conta
+                    </button>
                 </div>
             </aside>
 

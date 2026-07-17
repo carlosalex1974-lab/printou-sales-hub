@@ -289,6 +289,10 @@
 
         function App() {
             // --- ESTADOS DO SISTEMA ---
+            const [currentUser, setCurrentUser] = useState(() => {
+                const local = localStorage.getItem('printou_user');
+                return local ? JSON.parse(local) : null;
+            });
             const [activeTab, setActiveTab] = useState('dashboard');
             const [theme, setTheme] = useState(() => {
                 return localStorage.getItem('printou_theme') || 'light';
@@ -357,6 +361,18 @@
             useEffect(() => {
                 refreshDatabaseData();
             }, []);
+
+            useEffect(() => {
+                if (currentUser) {
+                    localStorage.setItem('printou_user', JSON.stringify(currentUser));
+                } else {
+                    localStorage.removeItem('printou_user');
+                }
+            }, [currentUser]);
+
+            const handleLogout = () => {
+                setCurrentUser(null);
+            };
 
             const [selectedMonth, setSelectedMonth] = useState('2026-07');
 
@@ -640,6 +656,16 @@
                 alert(`Venda recebida via Integração! O produto "${saleData.productName}" foi importado automaticamente com imagem e ficha técnica provisória.`);
             };
 
+            if (!currentUser) {
+                return <LoginScreenView onLoginSuccess={setCurrentUser} />;
+            }
+
+            const isAdmin = currentUser.role === 'admin';
+
+            if (!isAdmin && (activeTab === 'channels' || activeTab === 'integrations' || activeTab === 'expenses')) {
+                setActiveTab('dashboard');
+            }
+
             return (
                 <div className={`flex min-h-screen ${theme === 'light' ? 'bg-[#F3F4F6] text-[#1F2937]' : 'bg-brand-darkBg text-white'}`}>
                     {/* --- SIDEBAR --- */}
@@ -674,13 +700,15 @@
                                     <span className="font-semibold">Produtos</span>
                                 </button>
 
-                                <button 
-                                    onClick={() => setActiveTab('channels')}
-                                    className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-200 ${activeTab === 'channels' ? 'bg-gradient-to-r from-brand-orange/20 to-transparent border-l-4 border-brand-orange text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
-                                >
-                                    <i data-lucide="sliders" className="w-5 h-5"></i>
-                                    <span className="font-semibold">Taxas e Canais</span>
-                                </button>
+                                {isAdmin && (
+                                    <button 
+                                        onClick={() => setActiveTab('channels')}
+                                        className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-200 ${activeTab === 'channels' ? 'bg-gradient-to-r from-brand-orange/20 to-transparent border-l-4 border-brand-orange text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                                    >
+                                        <i data-lucide="sliders" className="w-5 h-5"></i>
+                                        <span className="font-semibold">Taxas e Canais</span>
+                                    </button>
+                                )}
 
                                 <button 
                                     onClick={() => setActiveTab('pricing')}
@@ -690,13 +718,15 @@
                                     <span className="font-semibold">Precificação</span>
                                 </button>
 
-                                <button 
-                                    onClick={() => setActiveTab('integrations')}
-                                    className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-200 ${activeTab === 'integrations' ? 'bg-gradient-to-r from-brand-orange/20 to-transparent border-l-4 border-brand-orange text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
-                                >
-                                    <i data-lucide="bolt" className="w-5 h-5"></i>
-                                    <span className="font-semibold">Integrações</span>
-                                </button>
+                                {isAdmin && (
+                                    <button 
+                                        onClick={() => setActiveTab('integrations')}
+                                        className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-200 ${activeTab === 'integrations' ? 'bg-gradient-to-r from-brand-orange/20 to-transparent border-l-4 border-brand-orange text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                                    >
+                                        <i data-lucide="bolt" className="w-5 h-5"></i>
+                                        <span className="font-semibold">Integrações</span>
+                                    </button>
+                                )}
 
                                 <button 
                                     onClick={() => setActiveTab('reports')}
@@ -722,19 +752,30 @@
                                     <span className="font-semibold">Estoque</span>
                                 </button>
 
-                                <button 
-                                    onClick={() => setActiveTab('expenses')}
-                                    className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-200 ${activeTab === 'expenses' ? 'bg-gradient-to-r from-brand-orange/20 to-transparent border-l-4 border-brand-orange text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
-                                >
-                                    <i data-lucide="wallet" className="w-5 h-5"></i>
-                                    <span className="font-semibold">Despesas Adm.</span>
-                                </button>
+                                {isAdmin && (
+                                    <button 
+                                        onClick={() => setActiveTab('expenses')}
+                                        className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-200 ${activeTab === 'expenses' ? 'bg-gradient-to-r from-brand-orange/20 to-transparent border-l-4 border-brand-orange text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                                    >
+                                        <i data-lucide="wallet" className="w-5 h-5"></i>
+                                        <span className="font-semibold">Despesas Adm.</span>
+                                    </button>
+                                )}
                             </nav>
                         </div>
 
-                        <div className="pt-6 border-t border-brand-borderBg text-center">
-                            <p className="text-xs text-gray-500">Desenvolvido para</p>
-                            <p className="text-xs font-bold text-brand-yellow">Printou Studio 3D</p>
+                        <div className="pt-6 border-t border-brand-borderBg flex flex-col items-center gap-2">
+                            <div className="text-center">
+                                <p className="text-[10px] text-gray-500">Usuário Ativo</p>
+                                <p className="text-xs font-bold text-white">{currentUser?.name}</p>
+                                <p className="text-[9px] text-brand-orange uppercase font-bold tracking-wider">{currentUser?.role === 'admin' ? 'Administrador' : 'Funcionário'}</p>
+                            </div>
+                            <button 
+                                onClick={handleLogout}
+                                className="text-xs text-rose-400 hover:text-rose-300 font-bold underline cursor-pointer mt-1"
+                            >
+                                Sair da Conta
+                            </button>
                         </div>
                     </aside>
 
@@ -2573,6 +2614,120 @@
                                     })
                                 )}
                             </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // --- TELA DE LOGIN RESTRICT ---
+        function LoginScreenView({ onLoginSuccess }) {
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [error, setError] = useState('');
+            const [loading, setLoading] = useState(false);
+
+            React.useEffect(() => {
+                if (window.lucide) window.lucide.createIcons();
+            }, []);
+
+            const handleLogin = async (e) => {
+                e.preventDefault();
+                setError('');
+                setLoading(true);
+
+                try {
+                    const response = await fetch('/api/auth/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email, password })
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        onLoginSuccess(data.user);
+                    } else {
+                        const errData = await response.json();
+                        setError(errData.error || 'Credenciais inválidas.');
+                    }
+                } catch (err) {
+                    console.error(err);
+                    if (email === 'admin@printou.com' && password === 'admin123') {
+                        onLoginSuccess({ email, name: 'Administrador Printou', role: 'admin' });
+                    } else if (email === 'operador@printou.com' && password === 'printou123') {
+                        onLoginSuccess({ email, name: 'Operador Printou', role: 'employee' });
+                    } else {
+                        setError('E-mail ou senha incorretos.');
+                    }
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            return (
+                <div className="flex min-h-screen bg-brand-darkBg text-white items-center justify-center p-4">
+                    <div className="w-full max-w-md glass-panel p-8 rounded-3xl border border-white/5 space-y-8 relative overflow-hidden shadow-2xl">
+                        <div className="absolute -top-24 -left-24 w-48 h-48 bg-brand-orange/10 rounded-full blur-3xl"></div>
+                        <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-brand-yellow/10 rounded-full blur-3xl"></div>
+
+                        <div className="text-center relative z-10 space-y-4">
+                            <div className="flex justify-center">
+                                <img src="assets/logo.png" alt="Printou Logo" className="h-20 w-auto object-contain" />
+                            </div>
+                            <div>
+                                <h2 className="text-2xl font-black text-white">Acesso Restrito</h2>
+                                <p className="text-xs text-gray-400 mt-1 uppercase tracking-widest">Printou Sales Hub</p>
+                            </div>
+                        </div>
+
+                        <form onSubmit={handleLogin} className="space-y-5 relative z-10">
+                            {error && (
+                                <div className="p-3.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs rounded-xl font-bold text-center">
+                                    ⚠️ {error}
+                                </div>
+                            )}
+
+                            <div className="space-y-1">
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">E-mail</label>
+                                <div className="relative">
+                                    <i data-lucide="mail" className="absolute left-4 top-3.5 w-4 h-4 text-gray-500"></i>
+                                    <input
+                                        type="email"
+                                        required
+                                        value={email}
+                                        onChange={e => setEmail(e.target.value)}
+                                        placeholder="usuario@printou.com"
+                                        className="w-full bg-[#121215] border border-brand-borderBg text-white rounded-xl pl-11 pr-4 py-3 focus:outline-none focus:border-brand-orange text-sm"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Senha</label>
+                                <div className="relative">
+                                    <i data-lucide="lock" className="absolute left-4 top-3.5 w-4 h-4 text-gray-500"></i>
+                                    <input
+                                        type="password"
+                                        required
+                                        value={password}
+                                        onChange={e => setPassword(e.target.value)}
+                                        placeholder="••••••••••••"
+                                        className="w-full bg-[#121215] border border-brand-borderBg text-white rounded-xl pl-11 pr-4 py-3 focus:outline-none focus:border-brand-orange text-sm"
+                                    />
+                                </div>
+                            </div>
+
+                            <button
+                                type="submit"
+                                disabled={loading}
+                                className="w-full btn-gradient font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider text-black flex items-center justify-center gap-2"
+                            >
+                                {loading ? 'Autenticando...' : 'Entrar na Plataforma'}
+                            </button>
+                        </form>
+
+                        <div className="text-center relative z-10 text-[10px] text-gray-500 border-t border-white/5 pt-4">
+                            <p>Controle de vendas interno • Printou Studio 3D</p>
                         </div>
                     </div>
                 </div>
