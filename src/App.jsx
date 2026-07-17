@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { BarChart3, ShoppingBag, Printer, Sliders, Plus, Bolt, X, PieChart, Truck, Wallet, Sun, Moon, Package } from 'lucide-react';
+import { BarChart3, ShoppingBag, Printer, Sliders, Plus, Bolt, X, PieChart, Truck, Wallet, Sun, Moon, Package, Menu, DollarSign } from 'lucide-react';
 import DashboardView from './components/Dashboard';
 import DashboardCharts from './components/DashboardCharts';
 import SalesListView from './components/SalesList';
@@ -70,6 +70,7 @@ function App() {
         return local ? JSON.parse(local) : null;
     });
     const [activeTab, setActiveTab] = useState('dashboard');
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [theme, setTheme] = useState(() => {
         return localStorage.getItem('printou_theme') || 'light';
     });
@@ -149,6 +150,10 @@ function App() {
     const handleLogout = () => {
         setCurrentUser(null);
     };
+
+    useEffect(() => {
+        setIsSidebarOpen(false);
+    }, [activeTab]);
 
     const [selectedMonth, setSelectedMonth] = useState('2026-07');
 
@@ -456,9 +461,17 @@ function App() {
     }
 
     return (
-        <div className={`flex min-h-screen ${theme === 'light' ? 'bg-[#F3F4F6] text-[#1F2937]' : 'bg-brand-darkBg text-white'}`}>
+        <div className={`flex min-h-screen ${theme === 'light' ? 'bg-[#F3F4F6] text-[#1F2937]' : 'bg-brand-darkBg text-white'} overflow-x-hidden`}>
+            {/* Backdrop para fechar o menu no celular */}
+            {isSidebarOpen && (
+                <div 
+                    onClick={() => setIsSidebarOpen(false)} 
+                    className="fixed inset-0 bg-black/60 z-40 lg:hidden backdrop-blur-sm"
+                />
+            )}
+
             {/* --- SIDEBAR --- */}
-            <aside className="w-64 glass-panel border-r border-brand-borderBg flex flex-col justify-between p-6">
+            <aside className={`w-64 glass-panel border-r border-brand-borderBg flex flex-col justify-between p-6 fixed lg:static inset-y-0 left-0 z-50 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 transition-transform duration-300 ease-in-out`}>
                 <div>
                     <div className="flex items-center justify-center mb-10">
                         <img src="assets/logo.png" alt="Printou Logo" className="w-48 h-auto object-contain" />
@@ -569,12 +582,20 @@ function App() {
             </aside>
 
             {/* --- CONTEÚDO PRINCIPAL --- */}
-            <main className="flex-1 p-8 overflow-y-auto">
+            <main className="flex-1 p-4 lg:p-8 overflow-y-auto w-full">
                 {/* Header Superior */}
                 <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-8">
-                    <div>
-                        <span className="text-xs font-bold tracking-widest text-brand-orange uppercase">Operações</span>
-                        <h2 className="text-3xl font-extrabold text-white">Controle Central de Vendas</h2>
+                    <div className="flex items-center gap-3">
+                        <button 
+                            onClick={() => setIsSidebarOpen(true)}
+                            className="lg:hidden p-2 bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-xl"
+                        >
+                            <Menu className="w-5 h-5" />
+                        </button>
+                        <div>
+                            <span className="text-xs font-bold tracking-widest text-brand-orange uppercase">Operações</span>
+                            <h2 className="text-2xl lg:text-3xl font-extrabold text-white">Controle Central de Vendas</h2>
+                        </div>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-3">
