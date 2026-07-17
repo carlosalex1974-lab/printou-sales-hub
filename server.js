@@ -272,7 +272,7 @@ app.post('/api/auth/login', (req, res) => {
 });
 
 // Rota curinga para entregar o React App em qualquer rota não-API
-app.get('*', (req, res) => {
+app.get('/*', (req, res) => {
     res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
