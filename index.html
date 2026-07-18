@@ -2295,6 +2295,8 @@
             
             const [mlClientId, setMlClientId] = useState(credentials?.mercadolivre?.clientId || '');
             const [mlClientSecret, setMlClientSecret] = useState(credentials?.mercadolivre?.clientSecret || '');
+            const [ml2ClientId, setMl2ClientId] = useState(credentials?.mercadolivre2?.clientId || '');
+            const [ml2ClientSecret, setMl2ClientSecret] = useState(credentials?.mercadolivre2?.clientSecret || '');
             const [shopeeShopId, setShopeeShopId] = useState(credentials?.shopee?.shopId || '');
             const [shopeeApiKey, setShopeeApiKey] = useState(credentials?.shopee?.apiKey || '');
             const [siteApiKey, setSiteApiKey] = useState(credentials?.site?.apiKey || '');
@@ -2380,6 +2382,12 @@
                                 webhookUrl: `${window.location.origin}/api/webhooks/mercadolivre`,
                                 status: 'Sincronizado'
                             },
+                            mercadolivre2: {
+                                clientId: ml2ClientId,
+                                clientSecret: ml2ClientSecret,
+                                webhookUrl: `${window.location.origin}/api/webhooks/mercadolivre`,
+                                status: 'Sincronizado'
+                            },
                             shopee: {
                                 shopId: shopeeShopId,
                                 apiKey: shopeeApiKey,
@@ -2432,25 +2440,51 @@
                                 <div className="space-y-1">
                                     <span className="text-gray-400 font-bold uppercase block">URL de Notificação (Webhook)</span>
                                     <code className="bg-[#121215] text-brand-orange p-2 rounded-lg block overflow-x-auto text-[10px]">
-                                        http://sua-url-online.com/api/webhooks/mercadolivre
+                                        {window.location.origin}/api/webhooks/mercadolivre
                                     </code>
                                 </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div className="space-y-1">
-                                        <span className="text-gray-400 font-bold uppercase">Client ID</span>
-                                        <input
-                                            type="text" value={mlClientId} onChange={e => setMlClientId(e.target.value)}
-                                            placeholder="Ex: 88775544..."
-                                            className="w-full bg-brand-darkBg border border-brand-borderBg text-white rounded-lg p-2.5 focus:outline-none focus:border-brand-orange text-xs"
-                                        />
+
+                                <div className="border-t border-white/5 pt-3">
+                                    <span className="text-[10px] text-brand-yellow font-extrabold uppercase tracking-widest block mb-2">Conta 1: printoustudio3d (Clássico)</span>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="space-y-1">
+                                            <span className="text-gray-400 font-bold uppercase text-[9px] block">Client ID</span>
+                                            <input
+                                                type="text" value={mlClientId} onChange={e => setMlClientId(e.target.value)}
+                                                placeholder="Ex: 88775544..."
+                                                className="w-full bg-brand-darkBg border border-brand-borderBg text-white rounded-lg p-2 focus:outline-none focus:border-brand-orange text-xs"
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <span className="text-gray-400 font-bold uppercase text-[9px] block">Client Secret</span>
+                                            <input
+                                                type="password" value={mlClientSecret} onChange={e => setMlClientSecret(e.target.value)}
+                                                placeholder="••••••••••••"
+                                                className="w-full bg-brand-darkBg border border-brand-borderBg text-white rounded-lg p-2 focus:outline-none focus:border-brand-orange text-xs"
+                                            />
+                                        </div>
                                     </div>
-                                    <div className="space-y-1">
-                                        <span className="text-gray-400 font-bold uppercase">Client Secret</span>
-                                        <input
-                                            type="password" value={mlClientSecret} onChange={e => setMlClientSecret(e.target.value)}
-                                            placeholder="••••••••••••"
-                                            className="w-full bg-brand-darkBg border border-brand-borderBg text-white rounded-lg p-2.5 focus:outline-none focus:border-brand-orange text-xs"
-                                        />
+                                </div>
+
+                                <div className="border-t border-white/5 pt-3">
+                                    <span className="text-[10px] text-brand-yellow font-extrabold uppercase tracking-widest block mb-2">Conta 2: AlucarPrintoustudio3d (Premium)</span>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="space-y-1">
+                                            <span className="text-gray-400 font-bold uppercase text-[9px] block">Client ID</span>
+                                            <input
+                                                type="text" value={ml2ClientId} onChange={e => setMl2ClientId(e.target.value)}
+                                                placeholder="Ex: 88775544..."
+                                                className="w-full bg-brand-darkBg border border-brand-borderBg text-white rounded-lg p-2 focus:outline-none focus:border-brand-orange text-xs"
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <span className="text-gray-400 font-bold uppercase text-[9px] block">Client Secret</span>
+                                            <input
+                                                type="password" value={ml2ClientSecret} onChange={e => setMl2ClientSecret(e.target.value)}
+                                                placeholder="••••••••••••"
+                                                className="w-full bg-brand-darkBg border border-brand-borderBg text-white rounded-lg p-2 focus:outline-none focus:border-brand-orange text-xs"
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             </div>
