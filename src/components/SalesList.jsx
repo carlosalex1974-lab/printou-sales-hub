@@ -5,8 +5,15 @@ export default function SalesListView({ sales, products, channels, setSales, com
     const [selectedStatusFilter, setSelectedStatusFilter] = useState('Todos');
 
     const filteredSales = useMemo(() => {
-        if (selectedStatusFilter === 'Todos') return sales;
-        return sales.filter(s => s.status === selectedStatusFilter);
+        let result = sales;
+        if (selectedStatusFilter !== 'Todos') {
+            result = sales.filter(s => s.status === selectedStatusFilter);
+        }
+        return [...result].sort((a, b) => {
+            const dateCompare = (b.date || '').localeCompare(a.date || '');
+            if (dateCompare !== 0) return dateCompare;
+            return (b.id || '').localeCompare(a.id || '');
+        });
     }, [sales, selectedStatusFilter]);
 
     const handleDelete = (id) => {
