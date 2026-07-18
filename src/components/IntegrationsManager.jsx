@@ -67,7 +67,7 @@ export default function IntegrationsManager({ products, channels, integrationLog
             }
 
             // Faz o disparo POST real para a rota permanente do back-end Express
-            const response = await fetch(`http://localhost:3001/api/webhooks/${provider}`, {
+            const response = await fetch(`/api/webhooks/${provider}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(parsed)
@@ -92,31 +92,31 @@ export default function IntegrationsManager({ products, channels, integrationLog
     const handleSaveCredentials = async () => {
         try {
             // Sincroniza credenciais
-            const response = await fetch('http://localhost:3001/api/data');
+            const response = await fetch('/api/data');
             if (response.ok) {
                 const db = await response.json();
                 db.credentials = {
                     mercadolivre: {
                         clientId: mlClientId,
                         clientSecret: mlClientSecret,
-                        webhookUrl: 'http://localhost:3001/api/webhooks/mercadolivre',
+                        webhookUrl: `${window.location.origin}/api/webhooks/mercadolivre`,
                         status: 'Sincronizado'
                     },
                     shopee: {
                         shopId: shopeeShopId,
                         apiKey: shopeeApiKey,
-                        webhookUrl: 'http://localhost:3001/api/webhooks/shopee',
+                        webhookUrl: `${window.location.origin}/api/webhooks/shopee`,
                         status: 'Sincronizado'
                     },
                     site: {
                         apiKey: siteApiKey,
                         apiSecret: siteApiSecret,
-                        webhookUrl: 'http://localhost:3001/api/webhooks/site',
+                        webhookUrl: `${window.location.origin}/api/webhooks/site`,
                         status: 'Sincronizado'
                     }
                 };
                 
-                const saveRes = await fetch('http://localhost:3001/api/data', {
+                const saveRes = await fetch('/api/data', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(db)
