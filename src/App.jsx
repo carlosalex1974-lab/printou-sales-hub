@@ -30,6 +30,7 @@ const INITIAL_SALES = [];
 
 function App() {
     // --- ESTADOS DO SISTEMA ---
+    const [isLoaded, setIsLoaded] = useState(false);
     const [currentUser, setCurrentUser] = useState(() => {
         const local = localStorage.getItem('printou_user');
         return local ? JSON.parse(local) : null;
@@ -96,6 +97,8 @@ function App() {
             }
         } catch (error) {
             console.warn("Servidor de banco de dados offline. Usando fallback LocalStorage:", error);
+        } finally {
+            setIsLoaded(true);
         }
     };
 
@@ -201,6 +204,7 @@ function App() {
 
     // Sincronização geral com LocalStorage e Banco de Dados Local (com debounce de 100ms)
     useEffect(() => {
+        if (!isLoaded) return; // Não sincroniza até carregar o banco de dados real
         localStorage.setItem('printou_channels', JSON.stringify(channels));
         localStorage.setItem('printou_products', JSON.stringify(products));
         localStorage.setItem('printou_sales', JSON.stringify(sales));
@@ -228,7 +232,7 @@ function App() {
         };
         const timer = setTimeout(sync, 100);
         return () => clearTimeout(timer);
-    }, [channels, products, sales, suppliers, expenses, filaments]);
+    }, [channels, products, sales, suppliers, expenses, filaments, isLoaded]);
 
     // --- CÁLCULO DE CUSTO DO PRODUTO (Com Taxa de Perda/Falha ou Custo de Revenda) ---
     const calculateProductCost = (prod) => {
