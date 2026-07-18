@@ -139,12 +139,42 @@ export default function IntegrationsManager({ products, channels, integrationLog
         }
     };
 
+    const handleResetDatabase = async () => {
+        if (confirm("⚠️ ATENÇÃO: Tem certeza que deseja zerar TODAS as vendas, despesas, catálogo de produtos e estoque de filamentos? Isso apagará todos os dados de simulação e criará um banco limpo. As suas chaves de API/Credenciais e Canais NÃO serão excluídos.")) {
+            try {
+                const response = await fetch('/api/data/reset', { method: 'POST' });
+                if (response.ok) {
+                    alert("O banco de dados foi limpo com sucesso! A plataforma agora está pronta para receber seus dados reais.");
+                    if (onWebhookTriggered) {
+                        onWebhookTriggered();
+                    }
+                } else {
+                    alert("Falha ao zerar dados.");
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Erro de conexão ao zerar dados.");
+            }
+        }
+    };
+
     return (
         <div className="space-y-8">
-            <div>
-                <span className="text-xs font-bold tracking-widest text-brand-orange uppercase">Automações API</span>
-                <h3 className="font-black text-2xl text-gradient">Painel de Integrações e Webhooks</h3>
-                {/* 1. Cards de Conexão Oficial */}
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+                <div>
+                    <span className="text-xs font-bold tracking-widest text-brand-orange uppercase">Automações API</span>
+                    <h3 className="font-black text-2xl text-gradient">Painel de Integrações e Webhooks</h3>
+                </div>
+                <button
+                    onClick={handleResetDatabase}
+                    className="py-2.5 px-5 bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/20 text-rose-400 font-bold text-xs uppercase tracking-wider rounded-xl transition-all flex items-center gap-2 cursor-pointer"
+                >
+                    <Trash2 className="w-4 h-4" />
+                    Zerar Dados da Plataforma (Iniciar Produção)
+                </button>
+            </div>
+
+            {/* 1. Cards de Conexão Oficial */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Mercado Livre Card */}
                 <div className="glass-panel p-6 rounded-2xl border border-white/5 space-y-4">

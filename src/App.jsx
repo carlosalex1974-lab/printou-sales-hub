@@ -22,46 +22,11 @@ const INITIAL_CHANNELS = [
     { id: 'direta', name: 'Venda Direta / Pix', commission: 0.0, fixedFee: 0.0, color: '#30D158', hasFreeShippingThreshold: false, freeShippingThreshold: 0, defaultSellerShippingCost: 0.0, defaultBelowThresholdShippingCost: 0.0 }
 ];
 
-const INITIAL_SUPPLIERS = [
-    { id: 'sup1', name: '3D Fila', material: 'PLA Premium', pricePerKg: 95.00, leadTime: '3 dias', rating: '4.8' },
-    { id: 'sup2', name: 'Voolt3D', material: 'PLA Standard', pricePerKg: 85.00, leadTime: '2 dias', rating: '4.5' },
-    { id: 'sup3', name: 'Embalagens São Paulo', material: 'Caixas de Papelão', pricePerKg: 2.50, leadTime: '5 dias', rating: '4.6' }
-];
-
-const INITIAL_EXPENSES = [
-    { id: 'exp1', name: 'Conta de Água', category: 'Agua', value: 120.00, dueDate: '2026-07-20', status: 'Pago', competency: '2026-07' },
-    { id: 'exp2', name: 'Conta de Luz', category: 'Luz', value: 350.00, dueDate: '2026-07-20', status: 'Pago', competency: '2026-07' },
-    { id: 'exp3', name: 'Telefone & Internet', category: 'Telefone', value: 150.00, dueDate: '2026-07-20', status: 'Pago', competency: '2026-07' },
-    { id: 'exp4', name: 'Honorários Contabilidade', category: 'Contador', value: 400.00, dueDate: '2026-07-25', status: 'Pendente', competency: '2026-07' },
-    { id: 'exp5', name: 'Servidores & SaaS (Outros)', category: 'Outros', value: 99.90, dueDate: '2026-07-28', status: 'Pendente', competency: '2026-07' }
-];
-
-const INITIAL_PRODUCTS = [
-    { id: 'p1', name: 'Groot Porta-Plantas 15cm', type: '3d', weight: 120, printTime: 6.0, filamentCost: 90.0, machineHourCost: 2.0, finishingCost: 3.0, packagingCost: 2.5, failRate: 10, filamentId: 'fil1' },
-    { id: 'p2', name: 'Suporte de Headset Gamer', type: '3d', weight: 85, printTime: 4.5, filamentCost: 90.0, machineHourCost: 2.0, finishingCost: 1.5, packagingCost: 2.5, failRate: 8, filamentId: 'fil1' },
-    { id: 'p3', name: 'Vaso Espiral Geométrico', type: '3d', weight: 160, printTime: 8.0, filamentCost: 110.0, machineHourCost: 2.5, finishingCost: 4.0, packagingCost: 3.0, failRate: 12, filamentId: 'fil3' },
-    { id: 'p4', name: 'Organizador de Cabos Clip x5', type: '3d', weight: 18, printTime: 1.0, filamentCost: 90.0, machineHourCost: 2.0, finishingCost: 0.5, packagingCost: 1.0, failRate: 5, filamentId: 'fil2' },
-    { id: 'p5', name: 'Filamento PLA Voolt3D Preto 1kg', type: 'resale', acquisitionCost: 55.00 },
-    { id: 'p6', name: 'Bico Extrusor de Latão 0.4mm V6', type: 'resale', acquisitionCost: 4.50 }
-];
-
-const INITIAL_FILAMENTS = [
-    { id: 'fil1', name: 'PLA Premium Preto 1kg', supplierId: 'sup2', initialWeight: 1000, currentWeight: 820, alertThreshold: 200, colorHex: '#000000', material: 'PLA' },
-    { id: 'fil2', name: 'PLA Premium Branco 1kg', supplierId: 'sup2', initialWeight: 1000, currentWeight: 950, alertThreshold: 200, colorHex: '#FFFFFF', material: 'PLA' },
-    { id: 'fil3', name: 'PLA Premium Vermelho 1kg', supplierId: 'sup1', initialWeight: 1000, currentWeight: 150, alertThreshold: 200, colorHex: '#FF3B30', material: 'PLA' }
-];
-
-const INITIAL_SALES = [
-    { id: 's1', date: '2026-07-16', channelId: 'shopee', productId: 'p1', quantity: 1, grossValue: 49.90, shipping: 0.00, status: 'Pago' },
-    { id: 's2', date: '2026-07-16', channelId: 'ml1', productId: 'p2', quantity: 2, grossValue: 79.80, shipping: 6.00, status: 'Enviado' },
-    { id: 's3', date: '2026-07-15', channelId: 'direta', productId: 'p3', quantity: 1, grossValue: 65.00, shipping: 0.00, status: 'Pago' },
-    { id: 's4', date: '2026-07-15', channelId: 'site', productId: 'p1', quantity: 1, grossValue: 45.00, shipping: 12.00, status: 'Pago' },
-    { id: 's5', date: '2026-07-14', channelId: 'ml2', productId: 'p4', quantity: 3, grossValue: 36.00, shipping: 0.00, status: 'Pago' },
-    { id: 's6', date: '2026-07-14', channelId: 'shopee', productId: 'p2', quantity: 1, grossValue: 39.90, shipping: 0.00, status: 'Cancelado' },
-    { id: 's7', date: '2026-07-13', channelId: 'ml1', productId: 'p3', quantity: 1, grossValue: 69.90, shipping: 19.90, status: 'Entregue' },
-    { id: 's8', date: '2026-07-13', channelId: 'ml2', productId: 'p5', quantity: 2, grossValue: 190.00, shipping: 10.00, status: 'Pago' },
-    { id: 's9', date: '2026-07-12', channelId: 'direta', productId: 'p6', quantity: 5, grossValue: 60.00, shipping: 0.00, status: 'Pago' }
-];
+const INITIAL_SUPPLIERS = [];
+const INITIAL_EXPENSES = [];
+const INITIAL_PRODUCTS = [];
+const INITIAL_FILAMENTS = [];
+const INITIAL_SALES = [];
 
 function App() {
     // --- ESTADOS DO SISTEMA ---
@@ -599,32 +564,6 @@ function App() {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-3">
-                        <button 
-                            onClick={() => handleIncomingMarketplaceSale({
-                                productId: 'p_auto_yoda',
-                                productName: 'Baby Yoda Action Figure 3D',
-                                channelId: 'ml2',
-                                quantity: 1,
-                                grossValue: 89.90,
-                                productImage: 'assets/yoda_baby_3d_print_1784236410240.png'
-                            })}
-                            className="bg-white/5 border border-brand-orange/30 text-white px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-brand-orange/10 flex items-center gap-2 transition-all animate-pulse"
-                        >
-                            ⚡ Simular Venda Yoda (ML)
-                        </button>
-                        <button 
-                            onClick={() => handleIncomingMarketplaceSale({
-                                productId: 'p_auto_rainbow',
-                                productName: 'Filamento Rainbow Premium PLA 1kg',
-                                channelId: 'shopee',
-                                quantity: 2,
-                                grossValue: 270.00,
-                                productImage: 'assets/rainbow_filament_spool_1784236423229.png'
-                            })}
-                            className="bg-white/5 border border-brand-orange/30 text-white px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-brand-orange/10 flex items-center gap-2 transition-all animate-pulse"
-                        >
-                            ⚡ Simular Venda Filamento (Shopee)
-                        </button>
 
                         <select 
                             value={selectedMonth} 
