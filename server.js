@@ -440,7 +440,7 @@ app.get('/api/auth/mercadolivre/callback', async (req, res) => {
         
         // Determina a URL de callback dinâmica
         const host = req.get('host');
-        const protocol = req.protocol;
+        const protocol = host.includes('localhost') ? 'http' : 'https';
         const redirectUri = `${protocol}://${host}/api/auth/mercadolivre/callback`;
         
         const tokenUrl = 'https://api.mercadolibre.com/oauth/token';
