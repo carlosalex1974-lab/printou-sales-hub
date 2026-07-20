@@ -58,12 +58,48 @@ if (!fs.existsSync(DB_FILE)) {
 
 // Helper para ler DB
 function readDb() {
+    let db;
     try {
         const fileData = fs.readFileSync(DB_FILE, 'utf-8');
-        return JSON.parse(fileData);
+        db = JSON.parse(fileData);
     } catch (e) {
-        return DEFAULT_DB;
+        db = JSON.parse(JSON.stringify(DEFAULT_DB));
     }
+
+    // Injeta variáveis de ambiente se disponíveis
+    db.credentials = db.credentials || {};
+    
+    db.credentials.mercadolivre = db.credentials.mercadolivre || {};
+    db.credentials.mercadolivre.clientId = process.env.ML_CLIENT_ID || db.credentials.mercadolivre.clientId || '';
+    db.credentials.mercadolivre.clientSecret = process.env.ML_CLIENT_SECRET || db.credentials.mercadolivre.clientSecret || '';
+    
+    db.credentials.mercadolivre2 = db.credentials.mercadolivre2 || {};
+    db.credentials.mercadolivre2.clientId = process.env.ML2_CLIENT_ID || db.credentials.mercadolivre2.clientId || '';
+    db.credentials.mercadolivre2.clientSecret = process.env.ML2_CLIENT_SECRET || db.credentials.mercadolivre2.clientSecret || '';
+    
+    db.credentials.shopee = db.credentials.shopee || {};
+    db.credentials.shopee.shopId = process.env.SHOPEE_SHOP_ID || db.credentials.shopee.shopId || '';
+    db.credentials.shopee.apiKey = process.env.SHOPEE_API_KEY || db.credentials.shopee.apiKey || '';
+    
+    db.credentials.site = db.credentials.site || {};
+    db.credentials.site.apiKey = process.env.SITE_API_KEY || db.credentials.site.apiKey || '';
+    db.credentials.site.apiSecret = process.env.SITE_API_SECRET || db.credentials.site.apiSecret || '';
+
+    // Define status como Sincronizado se houver credenciais
+    if (db.credentials.mercadolivre.clientId && db.credentials.mercadolivre.clientSecret) {
+        db.credentials.mercadolivre.status = 'Sincronizado';
+    }
+    if (db.credentials.mercadolivre2.clientId && db.credentials.mercadolivre2.clientSecret) {
+        db.credentials.mercadolivre2.status = 'Sincronizado';
+    }
+    if (db.credentials.shopee.shopId && db.credentials.shopee.apiKey) {
+        db.credentials.shopee.status = 'Sincronizado';
+    }
+    if (db.credentials.site.apiKey && db.credentials.site.apiSecret) {
+        db.credentials.site.status = 'Sincronizado';
+    }
+
+    return db;
 }
 
 // Helper para salvar DB
