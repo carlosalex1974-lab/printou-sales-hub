@@ -307,6 +307,7 @@
                 mercadolivre: { clientId: '', clientSecret: '', webhookUrl: 'http://localhost:3001/api/webhooks/mercadolivre', status: 'Sincronizado' },
                 shopee: { shopId: '', apiKey: '', webhookUrl: 'http://localhost:3001/api/webhooks/shopee', status: 'Sincronizado' }
             });
+            const [isLoaded, setIsLoaded] = useState(false);
 
             const refreshDatabaseData = async () => {
                 try {
@@ -324,6 +325,8 @@
                     }
                 } catch (error) {
                     console.warn("Servidor de banco de dados offline. Usando fallback LocalStorage:", error);
+                } finally {
+                    setIsLoaded(true);
                 }
             };
 
@@ -429,6 +432,8 @@
 
             // Sincronização geral com LocalStorage e Banco de Dados Local (com debounce de 100ms)
             useEffect(() => {
+                if (!isLoaded) return;
+
                 localStorage.setItem('printou_channels', JSON.stringify(channels));
                 localStorage.setItem('printou_products', JSON.stringify(products));
                 localStorage.setItem('printou_sales', JSON.stringify(sales));
