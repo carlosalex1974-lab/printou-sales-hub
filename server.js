@@ -130,8 +130,59 @@ app.post('/api/data', (req, res) => {
     }
 });
 
-// Endpoint Webhook Genérico/Simulado para Mercado Livre e Shopee
-app.post('/api/webhooks/:provider', (req, res) => {
+// Helper para renovar o Access Token do Mercado Livre
+async function getValidAccessToken(accountKey, db) {
+    const creds = db.credentials[accountKey];
+    if (!creds || !creds.accessToken || !creds.refreshToken) {
+        return null;
+    }
+    
+    // Se expirar em menos de 5 minutos, atualiza
+    if (creds.tokenExpiresAt && Date.now() < creds.tokenExpiresAt - 300000) {
+        return creds.accessToken;
+    }
+    
+    console.log(`[ML] Atualizando token expirado para a conta ${accountKey}...`);
+    try {
+        const tokenUrl = 'https://api.mercadolibre.com/oauth/token';
+        const params = new URLSearchParams();
+        params.append('grant_type', 'refresh_token');
+        params.append('client_id', creds.clientId);
+        params.append('client_secret', creds.clientSecret);
+        params.append('refresh_token', creds.refreshToken);
+        
+        const response = await fetch(tokenUrl, {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: params
+        });
+        
+        if (response.ok) {
+            const tokenData = await response.json();
+            creds.accessToken = tokenData.access_token;
+            creds.refreshToken = tokenData.refresh_token;
+            creds.tokenExpiresAt = Date.now() + (tokenData.expires_in * 1000);
+            creds.status = 'Autorizado';
+            saveDb(db);
+            return creds.accessToken;
+        } else {
+            const errText = await response.text();
+            console.error(`[ML] Erro ao atualizar token da conta ${accountKey}:`, errText);
+            creds.status = 'Erro de Autenticação';
+            saveDb(db);
+            return null;
+        }
+    } catch (error) {
+        console.error(`[ML] Falha de conexão ao atualizar token da conta ${accountKey}:`, error);
+        return null;
+    }
+}
+
+// Endpoint Webhook Genérico/Simulado para Mercado Livre e Shopee (atualizado para dados reais do ML)
+app.post('/api/webhooks/:provider', async (req, res) => {
     const { provider } = req.params;
     const payload = req.body;
     
@@ -139,19 +190,102 @@ app.post('/api/webhooks/:provider', (req, res) => {
     
     try {
         const db = readDb();
-        
-        // Formata data atual
         const todayStr = new Date().toISOString().split('T')[0];
         
-        // Mapeia dados recebidos
-        const orderId = payload.order_id || payload.order_sn || `int_${Date.now().toString().slice(-4)}`;
-        const channelId = payload.channelId || (provider === 'mercadolivre' ? 'ml2' : provider === 'shopee' ? 'shopee' : 'site');
-        const productId = payload.productId || 'p1';
-        const quantity = parseInt(payload.quantity) || 1;
-        const grossValue = parseFloat(payload.grossValue) || 49.90;
-        const shipping = parseFloat(payload.shipping) || 0.0;
-        const buyer = payload.buyer || 'Cliente Integrado';
+        let orderId;
+        let channelId;
+        let productId;
+        let productName;
+        let quantity;
+        let grossValue;
+        let shipping;
+        let buyer;
+        let isRealMLOrder = false;
+
+        // Trata webhook oficial do Mercado Livre
+        if (provider === 'mercadolivre' && payload.resource && payload.topic === 'orders') {
+            isRealMLOrder = true;
+            const resourceId = payload.resource.split('/').pop();
+            const mlUserId = String(payload.user_id);
+            
+            // Identifica qual conta do Mercado Livre disparou
+            let accountKey = 'mercadolivre';
+            channelId = 'ml1'; // Printou Hub Premium
+            
+            if (db.credentials.mercadolivre2 && String(db.credentials.mercadolivre2.userId) === mlUserId) {
+                accountKey = 'mercadolivre2';
+                channelId = 'ml2'; // Alucar Premium
+            } else if (db.credentials.mercadolivre && String(db.credentials.mercadolivre.userId) === mlUserId) {
+                accountKey = 'mercadolivre';
+                channelId = 'ml1';
+            }
+            
+            const accessToken = await getValidAccessToken(accountKey, db);
+            if (!accessToken) {
+                throw new Error(`Não foi possível obter Token de Acesso válido para a conta ${accountKey}.`);
+            }
+            
+            // Busca detalhes da venda na API do Mercado Livre
+            const orderRes = await fetch(`https://api.mercadolibre.com/orders/${resourceId}`, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+            
+            if (!orderRes.ok) {
+                const errText = await orderRes.text();
+                throw new Error(`Erro ao buscar pedido ${resourceId} na API do ML: ${errText}`);
+            }
+            
+            const orderData = await orderRes.json();
+            orderId = String(orderData.id);
+            buyer = `${orderData.buyer.first_name || ''} ${orderData.buyer.last_name || ''}`.trim() || orderData.buyer.nickname || 'Comprador ML';
+            grossValue = orderData.total_amount;
+            
+            // Busca custos de frete se houver
+            shipping = 0.0;
+            if (orderData.shipping && orderData.shipping.id) {
+                try {
+                    const shipRes = await fetch(`https://api.mercadolibre.com/shipments/${orderData.shipping.id}`, {
+                        headers: { 'Authorization': `Bearer ${accessToken}` }
+                    });
+                    if (shipRes.ok) {
+                        const shipData = await shipRes.json();
+                        if (shipData.shipping_option && shipData.shipping_option.cost !== undefined) {
+                            shipping = shipData.shipping_option.cost;
+                        }
+                    }
+                } catch (shipErr) {
+                    console.warn("Não foi possível buscar custos de envio detalhados:", shipErr);
+                }
+            }
+            
+            const firstItem = orderData.order_items[0];
+            if (firstItem) {
+                productId = firstItem.item.id;
+                productName = firstItem.item.title;
+                quantity = firstItem.quantity;
+            } else {
+                productId = 'p1';
+                productName = 'Produto Mercado Livre';
+                quantity = 1;
+            }
+        } else {
+            // Lógica de simulação antiga
+            orderId = payload.order_id || payload.order_sn || `int_${Date.now().toString().slice(-4)}`;
+            channelId = payload.channelId || (provider === 'mercadolivre' ? 'ml2' : provider === 'shopee' ? 'shopee' : 'site');
+            productId = payload.productId || 'p1';
+            productName = payload.productName || `Produto Simulado ${productId}`;
+            quantity = parseInt(payload.quantity) || 1;
+            grossValue = parseFloat(payload.grossValue) || 49.90;
+            shipping = parseFloat(payload.shipping) || 0.0;
+            buyer = payload.buyer || 'Cliente Integrado';
+        }
         
+        // Evita duplicar venda
+        const saleExists = db.sales.find(s => s.id === orderId);
+        if (saleExists) {
+            return res.json({ success: true, message: `Pedido #${orderId} já processado anteriormente.` });
+        }
+
         // Adiciona log de recebimento
         const logEntry = {
             id: `log_${Date.now()}_${Math.random().toString().slice(-3)}`,
@@ -161,7 +295,7 @@ app.post('/api/webhooks/:provider', (req, res) => {
         };
         
         // Busca produto correspondente no estoque para baixa
-        const product = db.products.find(p => p.id === productId);
+        let product = db.products.find(p => p.id === productId || p.name.toLowerCase() === productName.toLowerCase());
         let deductionLogs = [];
         
         if (product) {
@@ -172,7 +306,7 @@ app.post('/api/webhooks/:provider', (req, res) => {
                 const filament = db.filaments.find(f => f.id === product.filamentId);
                 
                 if (filament) {
-                    filament.currentWeight = Math.max(0, filament.currentWeight - totalWeight);
+                    filament.currentWeight = Math.max(0, parseFloat((filament.currentWeight - totalWeight).toFixed(1)));
                     deductionLogs.push(`📉 Baixa automática de estoque: Descontados ${totalWeight}g do filamento "${filament.name}". Restante: ${filament.currentWeight}g.`);
                     
                     // Alerta de estoque crítico
@@ -184,15 +318,25 @@ app.post('/api/webhooks/:provider', (req, res) => {
                 deductionLogs.push(`📦 Produto de revenda. Baixa automática realizada no sistema.`);
             }
         } else {
-            // Importar provisoriamente se não existir
-            const newProd = {
+            // Importar provisoriamente se não existir no catálogo
+            const guessedType = productName.toLowerCase().includes('filamento') || productName.toLowerCase().includes('bico') ? 'resale' : '3d';
+            product = {
                 id: productId,
-                name: payload.productName || `Produto Simulado ${productId}`,
-                type: 'resale',
-                acquisitionCost: grossValue * 0.5
+                name: productName,
+                type: guessedType,
+                weight: guessedType === '3d' ? 100 : 0,
+                printTime: guessedType === '3d' ? 5.0 : 0,
+                filamentCost: 95.00,
+                machineHourCost: 2.00,
+                finishingCost: 2.00,
+                packagingCost: 2.50,
+                failRate: 10,
+                acquisitionCost: guessedType === 'resale' ? grossValue * 0.5 : 0,
+                isPendingConfig: true,
+                filamentId: guessedType === '3d' ? (db.filaments[0]?.id || 'fil1') : undefined
             };
-            db.products.push(newProd);
-            deductionLogs.push(`🆕 Produto desconhecido "${newProd.name}" importado automaticamente.`);
+            db.products.push(product);
+            deductionLogs.push(`🆕 Produto desconhecido "${product.name}" importado automaticamente.`);
         }
         
         // Registrar a venda no caixa
@@ -200,13 +344,13 @@ app.post('/api/webhooks/:provider', (req, res) => {
             id: orderId,
             date: todayStr,
             channelId,
-            productId,
+            productId: product.id,
             quantity,
             grossValue,
             shipping,
             status: 'Pago'
         };
-        db.sales.push(newSale);
+        db.sales.unshift(newSale); // Mais novo primeiro
         
         // Escreve os logs finais
         db.integrationLogs = db.integrationLogs || [];
@@ -244,7 +388,7 @@ app.post('/api/webhooks/:provider', (req, res) => {
         });
     } catch (e) {
         console.error("Erro ao processar webhook:", e);
-        res.status(500).json({ error: "Erro ao processar requisição do webhook" });
+        res.status(500).json({ error: `Erro ao processar webhook: ${e.message}` });
     }
 });
 
@@ -275,6 +419,83 @@ app.post('/api/data/reset', (req, res) => {
     } catch (e) {
         console.error(e);
         res.status(500).json({ error: "Erro ao resetar dados do sistema" });
+    }
+});
+
+// Endpoint Callback para OAuth 2.0 do Mercado Livre
+app.get('/api/auth/mercadolivre/callback', async (req, res) => {
+    const { code, state } = req.query; // state define se é 'ml1' ou 'ml2'
+    if (!code) {
+        return res.status(400).send("Código de autorização não fornecido");
+    }
+    
+    try {
+        const db = readDb();
+        const accountKey = state === 'ml2' ? 'mercadolivre2' : 'mercadolivre';
+        const creds = db.credentials[accountKey];
+        
+        if (!creds || !creds.clientId || !creds.clientSecret) {
+            return res.status(400).send("Credenciais do Mercado Livre não configuradas no servidor.");
+        }
+        
+        // Determina a URL de callback dinâmica
+        const host = req.get('host');
+        const protocol = req.protocol;
+        const redirectUri = `${protocol}://${host}/api/auth/mercadolivre/callback`;
+        
+        const tokenUrl = 'https://api.mercadolibre.com/oauth/token';
+        const params = new URLSearchParams();
+        params.append('grant_type', 'authorization_code');
+        params.append('client_id', creds.clientId);
+        params.append('client_secret', creds.clientSecret);
+        params.append('code', code);
+        params.append('redirect_uri', redirectUri);
+        
+        const response = await fetch(tokenUrl, {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: params
+        });
+        
+        if (!response.ok) {
+            const errText = await response.text();
+            console.error("Erro na troca de token:", errText);
+            return res.status(400).send(`Erro ao obter token do Mercado Livre: ${errText}`);
+        }
+        
+        const tokenData = await response.json();
+        
+        // Salva os tokens no banco
+        creds.accessToken = tokenData.access_token;
+        creds.refreshToken = tokenData.refresh_token;
+        creds.userId = String(tokenData.user_id);
+        creds.tokenExpiresAt = Date.now() + (tokenData.expires_in * 1000);
+        creds.status = 'Autorizado';
+        
+        saveDb(db);
+        
+        // Redireciona de volta para o painel do aplicativo
+        res.send(`
+            <html>
+                <head>
+                    <title>Conectado ao Mercado Livre</title>
+                    <script>
+                        alert("Conta do Mercado Livre vinculada com sucesso!");
+                        window.location.href = "/";
+                    </script>
+                </head>
+                <body style="font-family: sans-serif; background-color: #14141b; color: #fff; text-align: center; padding-top: 50px;">
+                    <h2>Conexão bem sucedida! Redirecionando...</h2>
+                    <script>setTimeout(function(){ window.location.href = "/"; }, 1500);</script>
+                </body>
+            </html>
+        `);
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Erro interno ao processar autorização");
     }
 });
 
