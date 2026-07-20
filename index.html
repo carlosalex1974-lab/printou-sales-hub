@@ -2362,6 +2362,18 @@
                 }
             };
 
+            const handleAuthML = (accountKey) => {
+                const clientId = accountKey === 'mercadolivre2' ? ml2ClientId : mlClientId;
+                if (!clientId) {
+                    alert('Por favor, insira e salve o Client ID antes de tentar conectar a conta.');
+                    return;
+                }
+                const state = accountKey === 'mercadolivre2' ? 'ml2' : 'ml1';
+                const redirectUri = encodeURIComponent(`${window.location.origin}/api/auth/mercadolivre/callback`);
+                const authUrl = `https://auth.mercadolivre.com.br/authorization?response_type=code&client_id=${clientId}&redirect_uri=${redirectUri}&state=${state}`;
+                window.location.href = authUrl;
+            };
+
             const handleResetDatabase = async () => {
                 if (confirm("⚠️ ATENÇÃO: Tem certeza que deseja zerar TODAS as vendas, despesas, catálogo de produtos e estoque de filamentos? Isso apagará todos os dados de simulação e criará um banco limpo. As suas chaves de API/Credenciais e Canais NÃO serão excluídos.")) {
                     try {
@@ -2417,8 +2429,8 @@
                                     </code>
                                 </div>
 
-                                <div className="border-t border-white/5 pt-3">
-                                    <span className="text-[10px] text-brand-yellow font-extrabold uppercase tracking-widest block mb-2">Conta 1: printoustudio3d (Clássico)</span>
+                                <div className="border-t border-white/5 pt-3 space-y-2">
+                                    <span className="text-[10px] text-brand-yellow font-extrabold uppercase tracking-widest block">Conta 1: printoustudio3d (Clássico)</span>
                                     <div className="grid grid-cols-2 gap-3">
                                         <div className="space-y-1">
                                             <span className="text-gray-400 font-bold uppercase text-[9px] block">Client ID</span>
@@ -2437,10 +2449,26 @@
                                             />
                                         </div>
                                     </div>
+                                    <div className="flex items-center justify-between pt-1">
+                                        <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded ${
+                                            credentials?.mercadolivre?.status === 'Autorizado' 
+                                                ? 'bg-emerald-500/10 text-emerald-400' 
+                                                : 'bg-amber-500/10 text-amber-400'
+                                        }`}>
+                                            Status: {credentials?.mercadolivre?.status || 'Pendente'}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleAuthML('mercadolivre')}
+                                            className="py-1 px-3 bg-brand-orange/10 hover:bg-brand-orange/20 text-brand-orange border border-brand-orange/30 font-bold text-[10px] uppercase tracking-wider rounded-lg transition-all cursor-pointer"
+                                        >
+                                            {credentials?.mercadolivre?.status === 'Autorizado' ? 'Reconectar' : 'Conectar Conta'}
+                                        </button>
+                                    </div>
                                 </div>
 
-                                <div className="border-t border-white/5 pt-3">
-                                    <span className="text-[10px] text-brand-yellow font-extrabold uppercase tracking-widest block mb-2">Conta 2: AlucarPrintoustudio3d (Premium)</span>
+                                <div className="border-t border-white/5 pt-3 space-y-2">
+                                    <span className="text-[10px] text-brand-yellow font-extrabold uppercase tracking-widest block">Conta 2: AlucarPrintoustudio3d (Premium)</span>
                                     <div className="grid grid-cols-2 gap-3">
                                         <div className="space-y-1">
                                             <span className="text-gray-400 font-bold uppercase text-[9px] block">Client ID</span>
@@ -2459,7 +2487,25 @@
                                             />
                                         </div>
                                     </div>
+                                    <div className="flex items-center justify-between pt-1">
+                                        <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded ${
+                                            credentials?.mercadolivre2?.status === 'Autorizado' 
+                                                ? 'bg-emerald-500/10 text-emerald-400' 
+                                                : 'bg-amber-500/10 text-amber-400'
+                                        }`}>
+                                            Status: {credentials?.mercadolivre2?.status || 'Pendente'}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleAuthML('mercadolivre2')}
+                                            className="py-1 px-3 bg-brand-orange/10 hover:bg-brand-orange/20 text-brand-orange border border-brand-orange/30 font-bold text-[10px] uppercase tracking-wider rounded-lg transition-all cursor-pointer"
+                                        >
+                                            {credentials?.mercadolivre2?.status === 'Autorizado' ? 'Reconectar' : 'Conectar Conta'}
+                                        </button>
+                                    </div>
                                 </div>
+                            </div>
+                        </div>
                             </div>
                         </div>
 
