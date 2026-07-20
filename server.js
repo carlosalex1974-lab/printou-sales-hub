@@ -268,8 +268,33 @@ app.post('/api/webhooks/:provider', async (req, res) => {
                 productName = 'Produto Mercado Livre';
                 quantity = 1;
             }
+        } else if (provider === 'site') {
+            // Webhook do site próprio (Shopify)
+            // Se for Shopify, o ID vem em payload.name (ex: "#1001") ou payload.id
+            orderId = payload.name || (payload.id ? String(payload.id) : `shop_${Date.now().toString().slice(-4)}`);
+            channelId = 'site';
+            
+            const firstItem = payload.line_items && payload.line_items[0];
+            if (firstItem) {
+                productId = String(firstItem.variant_id || firstItem.product_id || 'p3');
+                productName = firstItem.name || firstItem.title || 'Produto Site';
+                quantity = parseInt(firstItem.quantity) || 1;
+            } else {
+                productId = payload.productId || 'p3';
+                productName = payload.productName || 'Produto Shopify';
+                quantity = parseInt(payload.quantity) || 1;
+            }
+            
+            grossValue = parseFloat(payload.total_price) || parseFloat(payload.grossValue) || 49.90;
+            shipping = payload.shipping_lines && payload.shipping_lines[0] ? parseFloat(payload.shipping_lines[0].price) : (parseFloat(payload.shipping) || 0.0);
+            
+            if (payload.customer) {
+                buyer = `${payload.customer.first_name || ''} ${payload.customer.last_name || ''}`.trim() || 'Cliente Shopify';
+            } else {
+                buyer = payload.buyer || 'Cliente Shopify';
+            }
         } else {
-            // Lógica de simulação antiga
+            // Lógica de simulação antiga/Shopee
             orderId = payload.order_id || payload.order_sn || `int_${Date.now().toString().slice(-4)}`;
             channelId = payload.channelId || (provider === 'mercadolivre' ? 'ml2' : provider === 'shopee' ? 'shopee' : 'site');
             productId = payload.productId || 'p1';
