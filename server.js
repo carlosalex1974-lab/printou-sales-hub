@@ -124,8 +124,19 @@ app.get('/api/data', (req, res) => {
 // Endpoint para salvar dados
 app.post('/api/data', (req, res) => {
     try {
-        const data = req.body;
-        saveDb(data);
+        const newData = req.body;
+        const currentData = readDb();
+        
+        // Mesclar dados enviados com credenciais, usuários e logs anteriores para evitar perda/apagamento
+        const mergedData = {
+            ...currentData,
+            ...newData,
+            credentials: newData.credentials || currentData.credentials,
+            users: newData.users || currentData.users,
+            integrationLogs: newData.integrationLogs || currentData.integrationLogs
+        };
+        
+        saveDb(mergedData);
         res.json({ success: true, message: "Dados persistidos no banco de dados local com sucesso!" });
     } catch (error) {
         console.error("Erro ao salvar banco de dados local:", error);
