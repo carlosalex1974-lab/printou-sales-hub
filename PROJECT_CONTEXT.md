@@ -81,3 +81,24 @@ A plataforma está pronta para deploy contínuo em serviços de nuvem com as seg
 
 > [!IMPORTANT]
 > **Persistência de Dados**: Em instâncias gratuitas do Render, o arquivo `data/db.json` será reinicializado se a máquina hibernar. Para produções comerciais, recomenda-se configurar um volume em disco persistente montado na pasta `/data` ou migrar as funções de leitura/escrita do `server.js` para um banco de dados externo (PostgreSQL).
+
+---
+
+## 📓 Histórico de Alterações e Estabilização (Julho/2026)
+
+Para garantir o funcionamento sem falhas e facilitar manutenções futuras, as seguintes melhorias críticas foram aplicadas ao arquivo `server.js`:
+
+1. **Prevenção de Vendas Falsas (Filtragem de Tópicos)**:
+   - Webhooks recebidos da rota `/api/webhooks/mercadolivre` com tópicos que não sejam de pedidos (como `items`, `questions`, etc.) agora são ignorados e não geram registros de vendas simuladas no fluxo de caixa.
+
+2. **Trava de Concorrência (`activeLocks`)**:
+   - Criado um mecanismo global com `Set` em memória para monitorar pedidos em processamento.
+   - Chamadas simultâneas de webhook para o mesmo `orderId` são travadas e resolvidas sem duplicar registros no `db.json`, resolvendo problemas de concorrência.
+   - O lock é limpo e liberado no bloco `finally` garantindo resiliência contra erros de execução.
+
+3. **Renovação de Chaves de Acesso (Mercado Livre)**:
+   - O helper `getValidAccessToken` agora serializa explicitamente os parâmetros de requisição utilizando `params.toString()` com o cabeçalho `Content-Type: application/x-www-form-urlencoded` no `fetch`. Isso garante compatibilidade total e evita quebras de token expirado nas contas autorizadas (`ml1` e `ml2`).
+
+4. **Script de Testes de Concorrência**:
+   - Disponibilizado o script `scratch/test-lock.js` que pode ser executado localmente para validar a trava de concorrência disparando requisições simultâneas contra o servidor de teste.
+
