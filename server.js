@@ -12,6 +12,9 @@ const PORT = process.env.PORT || 3001;
 const DB_DIR = path.join(__dirname, 'data');
 const DB_FILE = path.join(DB_DIR, 'db.json');
 
+// Trava em memória para evitar concorrência/duplicação de webhooks
+const activeLocks = new Set();
+
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
@@ -157,7 +160,7 @@ async function getValidAccessToken(accountKey, db) {
                 'Accept': 'application/json',
                 'Content-Type': 'application/x-www-form-urlencoded'
             },
-            body: params
+            body: params.toString()
         });
         
         if (response.ok) {
@@ -192,6 +195,29 @@ app.post('/api/webhooks/:provider', async (req, res) => {
     if (provider === 'mercadolivre' && payload.topic && payload.topic !== 'orders') {
         console.log(`[WEBHOOK] Ignorando notificação do tópico "${payload.topic}" do Mercado Livre (apenas pedidos são processados).`);
         return res.json({ success: true, message: `Tópico "${payload.topic}" ignorado.` });
+    }
+
+    // Identificação precoce do ID do pedido para a trava de concorrência
+    let orderIdCandidate = null;
+    if (provider === 'mercadolivre') {
+        if (payload.resource && payload.topic === 'orders') {
+            orderIdCandidate = payload.resource.split('/').pop();
+        } else {
+            orderIdCandidate = payload.order_id || payload.order_sn || null;
+        }
+    } else if (provider === 'site') {
+        orderIdCandidate = payload.name || (payload.id ? String(payload.id) : null);
+    } else {
+        orderIdCandidate = payload.order_id || payload.order_sn || null;
+    }
+
+    // Trava de Concorrência
+    if (orderIdCandidate) {
+        if (activeLocks.has(orderIdCandidate)) {
+            console.log(`[WEBHOOK] Evitando processamento duplicado concorrente para o pedido #${orderIdCandidate}`);
+            return res.json({ success: true, message: `Pedido #${orderIdCandidate} já está sendo processado.` });
+        }
+        activeLocks.add(orderIdCandidate);
     }
 
     try {
@@ -420,6 +446,10 @@ app.post('/api/webhooks/:provider', async (req, res) => {
     } catch (e) {
         console.error("Erro ao processar webhook:", e);
         res.status(500).json({ error: `Erro ao processar webhook: ${e.message}` });
+    } finally {
+        if (orderIdCandidate) {
+            activeLocks.delete(orderIdCandidate);
+        }
     }
 });
 
