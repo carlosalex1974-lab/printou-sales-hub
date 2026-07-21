@@ -188,6 +188,12 @@ app.post('/api/webhooks/:provider', async (req, res) => {
     
     console.log(`[WEBHOOK] Notificação recebida de ${provider}:`, payload);
     
+    // Se for notificação do Mercado Livre de outros tópicos (como items, questions, etc.), ignoramos
+    if (provider === 'mercadolivre' && payload.topic && payload.topic !== 'orders') {
+        console.log(`[WEBHOOK] Ignorando notificação do tópico "${payload.topic}" do Mercado Livre (apenas pedidos são processados).`);
+        return res.json({ success: true, message: `Tópico "${payload.topic}" ignorado.` });
+    }
+
     try {
         const db = readDb();
         const todayStr = new Date().toISOString().split('T')[0];
