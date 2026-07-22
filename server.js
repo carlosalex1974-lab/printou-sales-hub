@@ -624,12 +624,235 @@ app.use((req, res) => {
     res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
+// =====================================================
+// AUTO-SYNC POLLER — Busca vendas novas no ML a cada 3 minutos
+// Não depende de webhooks. Consulta a API do ML diretamente.
+// =====================================================
+const POLL_INTERVAL_MS = 3 * 60 * 1000; // 3 minutos
+
+async function pollMercadoLivreOrders() {
+    const accountKeys = ['mercadolivre', 'mercadolivre2'];
+    const channelMap = { mercadolivre: 'ml1', mercadolivre2: 'ml2' };
+
+    for (const accountKey of accountKeys) {
+        try {
+            const db = readDb();
+            const creds = db.credentials[accountKey];
+            if (!creds || !creds.accessToken || !creds.refreshToken || !creds.userId) {
+                continue; // conta não configurada, pular
+            }
+
+            const accessToken = await getValidAccessToken(accountKey, db);
+            if (!accessToken) {
+                console.log(`[AUTO-SYNC] Não foi possível obter token para ${accountKey}. Pulando.`);
+                continue;
+            }
+
+            // Busca pedidos das últimas 6 horas
+            const since = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+            const url = `https://api.mercadolibre.com/orders/search?seller=${creds.userId}&order.date_created.from=${since}&sort=date_desc&limit=20`;
+
+            const response = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+
+            if (!response.ok) {
+                const errText = await response.text();
+                console.error(`[AUTO-SYNC] Erro ao buscar pedidos de ${accountKey}:`, errText);
+                continue;
+            }
+
+            const data = await response.json();
+            if (!data.results || data.results.length === 0) {
+                continue;
+            }
+
+            // Recarrega DB fresco para cada verificação
+            const freshDb = readDb();
+            const existingIds = new Set(freshDb.sales.map(s => s.id));
+            let newCount = 0;
+
+            for (const order of data.results) {
+                const orderId = String(order.id);
+
+                // Pula se já existe ou se está cancelado
+                if (existingIds.has(orderId)) continue;
+                if (order.status === 'cancelled') continue;
+
+                // Pula se não está pago
+                if (order.status !== 'paid') continue;
+
+                const channelId = channelMap[accountKey];
+                const buyer = `${order.buyer.first_name || ''} ${order.buyer.last_name || ''}`.trim() || order.buyer.nickname || 'Comprador ML';
+                const grossValue = order.total_amount;
+                const todayStr = new Date().toISOString().split('T')[0];
+
+                // Dados do produto
+                const firstItem = order.order_items && order.order_items[0];
+                let productId = firstItem ? firstItem.item.id : 'unknown';
+                let productName = firstItem ? firstItem.item.title : 'Produto ML';
+                let quantity = firstItem ? firstItem.quantity : 1;
+
+                // Busca frete
+                let shipping = 0;
+                if (order.shipping && order.shipping.id) {
+                    try {
+                        const shipRes = await fetch(`https://api.mercadolibre.com/shipments/${order.shipping.id}`, {
+                            headers: { 'Authorization': `Bearer ${accessToken}` }
+                        });
+                        if (shipRes.ok) {
+                            const shipData = await shipRes.json();
+                            if (shipData.shipping_option && shipData.shipping_option.cost !== undefined) {
+                                shipping = shipData.shipping_option.cost;
+                            }
+                        }
+                    } catch (e) {
+                        // ignora erro de frete
+                    }
+                }
+
+                // Verifica se o produto existe no catálogo
+                let product = freshDb.products.find(p => p.id === productId || p.name.toLowerCase() === productName.toLowerCase());
+                if (!product) {
+                    const guessedType = productName.toLowerCase().includes('filamento') || productName.toLowerCase().includes('bico') ? 'resale' : '3d';
+                    product = {
+                        id: productId,
+                        name: productName,
+                        type: guessedType,
+                        weight: guessedType === '3d' ? 100 : 0,
+                        printTime: guessedType === '3d' ? 5.0 : 0,
+                        filamentCost: 95.00,
+                        machineHourCost: 2.00,
+                        finishingCost: 2.00,
+                        packagingCost: 2.50,
+                        failRate: 10,
+                        acquisitionCost: guessedType === 'resale' ? grossValue * 0.5 : 0,
+                        isPendingConfig: true,
+                        filamentId: guessedType === '3d' ? (freshDb.filaments[0]?.id || 'fil1') : undefined
+                    };
+                    freshDb.products.push(product);
+                }
+
+                // Baixa de estoque para produtos 3D
+                if (product.type === '3d' && product.weight && product.filamentId) {
+                    const totalWeight = product.weight * quantity;
+                    const filament = freshDb.filaments.find(f => f.id === product.filamentId);
+                    if (filament) {
+                        filament.currentWeight = Math.max(0, parseFloat((filament.currentWeight - totalWeight).toFixed(1)));
+                    }
+                }
+
+                // Registra a venda
+                freshDb.sales.unshift({
+                    id: orderId,
+                    date: todayStr,
+                    channelId,
+                    productId: product.id,
+                    quantity,
+                    grossValue,
+                    shipping,
+                    status: 'Pago'
+                });
+
+                // Log
+                freshDb.integrationLogs = freshDb.integrationLogs || [];
+                freshDb.integrationLogs.push({
+                    id: `log_autosync_${Date.now()}_${Math.random().toString().slice(-3)}`,
+                    timestamp: new Date().toLocaleTimeString('pt-BR'),
+                    type: 'success',
+                    message: `🔄 [AUTO-SYNC] Pedido #${orderId} de ${buyer} importado automaticamente. Produto: "${productName}" — R$ ${grossValue.toFixed(2)}`
+                });
+
+                if (product.isPendingConfig) {
+                    freshDb.integrationLogs.push({
+                        id: `log_autosync_prod_${Date.now()}_${Math.random().toString().slice(-3)}`,
+                        timestamp: new Date().toLocaleTimeString('pt-BR'),
+                        type: 'info',
+                        message: `🆕 Produto "${productName}" importado automaticamente ao catálogo.`
+                    });
+                }
+
+                existingIds.add(orderId);
+                newCount++;
+            }
+
+            // Limita logs e salva
+            if (newCount > 0) {
+                if (freshDb.integrationLogs.length > 50) {
+                    freshDb.integrationLogs = freshDb.integrationLogs.slice(-50);
+                }
+                saveDb(freshDb);
+                console.log(`[AUTO-SYNC] ✅ ${newCount} nova(s) venda(s) importada(s) da conta ${accountKey}.`);
+            }
+        } catch (err) {
+            console.error(`[AUTO-SYNC] Erro geral ao sincronizar ${accountKey}:`, err.message);
+        }
+    }
+}
+
+// Atualiza status de vendas canceladas no ML
+async function pollCancelledOrders() {
+    try {
+        const db = readDb();
+        const creds = db.credentials.mercadolivre;
+        if (!creds || !creds.accessToken || !creds.userId) return;
+
+        const accessToken = await getValidAccessToken('mercadolivre', db);
+        if (!accessToken) return;
+
+        // Busca pedidos cancelados recentes
+        const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        const url = `https://api.mercadolibre.com/orders/search?seller=${creds.userId}&order.status=cancelled&order.date_created.from=${since}&limit=20`;
+
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!data.results) return;
+
+        const freshDb = readDb();
+        let updated = false;
+
+        for (const order of data.results) {
+            const sale = freshDb.sales.find(s => s.id === String(order.id) && s.status !== 'Cancelado');
+            if (sale) {
+                sale.status = 'Cancelado';
+                updated = true;
+                console.log(`[AUTO-SYNC] Pedido #${order.id} marcado como cancelado.`);
+            }
+        }
+
+        if (updated) saveDb(freshDb);
+    } catch (err) {
+        console.error('[AUTO-SYNC] Erro ao verificar cancelamentos:', err.message);
+    }
+}
+
 app.listen(PORT, () => {
     console.log(`\n======================================================`);
-    console.log(`🚀 Printou Hub - Banco de Dados Local Ativo!`);
+    console.log(`🚀 Printou Hub - Servidor Ativo!`);
     console.log(`   Endereço: http://localhost:${PORT}`);
-    console.log(`   Webhook Mercado Livre: http://localhost:${PORT}/api/webhooks/mercadolivre`);
-    console.log(`   Webhook Shopee: http://localhost:${PORT}/api/webhooks/shopee`);
+    console.log(`   Webhook ML: http://localhost:${PORT}/api/webhooks/mercadolivre`);
     console.log(`   Dados salvos em: ${DB_FILE}`);
+    console.log(`   🔄 Auto-Sync ML: ativo (a cada ${POLL_INTERVAL_MS / 1000}s)`);
     console.log(`======================================================\n`);
+
+    // Primeira sincronização 10 segundos após iniciar
+    setTimeout(() => {
+        console.log('[AUTO-SYNC] Executando primeira sincronização...');
+        pollMercadoLivreOrders();
+        pollCancelledOrders();
+    }, 10000);
+
+    // Poller contínuo a cada 3 minutos
+    setInterval(() => {
+        pollMercadoLivreOrders();
+    }, POLL_INTERVAL_MS);
+
+    // Verifica cancelamentos a cada 10 minutos
+    setInterval(() => {
+        pollCancelledOrders();
+    }, 10 * 60 * 1000);
 });
