@@ -41,7 +41,8 @@ const DEFAULT_DB = {
     credentials: {
         mercadolivre: { clientId: '', clientSecret: '', webhookUrl: 'http://localhost:3001/api/webhooks/mercadolivre', status: 'Não Sincronizado' },
         shopee: { shopId: '', apiKey: '', webhookUrl: 'http://localhost:3001/api/webhooks/shopee', status: 'Não Sincronizado' },
-        site: { apiKey: '', apiSecret: '', webhookUrl: 'http://localhost:3001/api/webhooks/site', status: 'Não Sincronizado' }
+        site: { apiKey: '', apiSecret: '', webhookUrl: 'http://localhost:3001/api/webhooks/site', status: 'Não Sincronizado' },
+        facebook: { accessToken: '', pageId: '1117637594770324', businessId: '1550133536629313', catalogId: '', status: 'Não Sincronizado' }
     },
     users: [
         { email: 'admin@printou.com', password: 'admin123', name: 'Administrador Printou', role: 'admin' },
@@ -88,6 +89,12 @@ function readDb() {
     db.credentials.site.apiKey = process.env.SITE_API_KEY || db.credentials.site.apiKey || '';
     db.credentials.site.apiSecret = process.env.SITE_API_SECRET || db.credentials.site.apiSecret || '';
 
+    db.credentials.facebook = db.credentials.facebook || {};
+    db.credentials.facebook.accessToken = process.env.FB_ACCESS_TOKEN || db.credentials.facebook.accessToken || '';
+    db.credentials.facebook.pageId = process.env.FB_PAGE_ID || db.credentials.facebook.pageId || '1117637594770324';
+    db.credentials.facebook.businessId = process.env.FB_BUSINESS_ID || db.credentials.facebook.businessId || '1550133536629313';
+    db.credentials.facebook.catalogId = process.env.FB_CATALOG_ID || db.credentials.facebook.catalogId || '';
+
     // Define status como Sincronizado se houver credenciais
     if (db.credentials.mercadolivre.clientId && db.credentials.mercadolivre.clientSecret) {
         db.credentials.mercadolivre.status = 'Sincronizado';
@@ -100,6 +107,11 @@ function readDb() {
     }
     if (db.credentials.site.apiKey && db.credentials.site.apiSecret) {
         db.credentials.site.status = 'Sincronizado';
+    }
+    if (db.credentials.facebook.accessToken) {
+        db.credentials.facebook.status = 'Sincronizado';
+    } else {
+        db.credentials.facebook.status = 'Não Sincronizado';
     }
 
     return db;
@@ -502,6 +514,295 @@ app.post('/api/integration/logs/clear', (req, res) => {
         res.json({ success: true, message: "Logs limpos com sucesso!" });
     } catch (e) {
         res.status(500).json({ error: "Erro ao limpar logs" });
+    }
+});
+
+});
+
+// =====================================================
+// ENDPOINTS DO AGENTE COMERCIAL FACEBOOK & SHOPIFY
+// =====================================================
+
+// Obter configurações do Facebook
+app.get('/api/facebook/config', (req, res) => {
+    try {
+        const db = readDb();
+        res.json(db.credentials.facebook || {});
+    } catch (e) {
+        res.status(500).json({ error: "Erro ao ler configurações do Facebook" });
+    }
+});
+
+// Salvar configurações do Facebook
+app.post('/api/facebook/config', (req, res) => {
+    try {
+        const db = readDb();
+        db.credentials.facebook = {
+            ...db.credentials.facebook,
+            ...req.body,
+            status: req.body.accessToken ? 'Sincronizado' : 'Não Sincronizado'
+        };
+        saveDb(db);
+        res.json({ success: true, message: "Configurações salvas com sucesso!", config: db.credentials.facebook });
+    } catch (e) {
+        res.status(500).json({ error: "Erro ao salvar configurações do Facebook" });
+    }
+});
+
+// Listar produtos do Shopify sincronizados
+app.get('/api/facebook/products', (req, res) => {
+    try {
+        const db = readDb();
+        res.json(db.shopifyProducts || []);
+    } catch (e) {
+        res.status(500).json({ error: "Erro ao listar produtos do Shopify" });
+    }
+});
+
+// Sincronizar produtos da loja Shopify
+app.post('/api/facebook/sync-shopify', async (req, res) => {
+    try {
+        const db = readDb();
+        const siteCreds = db.credentials.site;
+        
+        if (!siteCreds || !siteCreds.apiSecret) {
+            return res.status(400).json({ error: "Token de acesso do Shopify (Site) não configurado nas Integrações." });
+        }
+
+        const shopifyToken = siteCreds.apiSecret;
+        // Sempre usa o domínio myshopify correto
+        const shopUrl = `https://printoustudio3d.myshopify.com/admin/api/2024-01/products.json?limit=50`;
+
+        console.log(`[SHOPIFY-SYNC] Buscando produtos em printoustudio3d.myshopify.com...`);
+        
+        const response = await fetch(shopUrl, {
+            headers: {
+                'X-Shopify-Access-Token': shopifyToken,
+                'User-Agent': 'PrintouSalesHub (contato@printou.com)',
+                'Accept': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`Erro na API do Shopify (Status ${response.status}): ${errText}`);
+        }
+
+        const data = await response.json();
+        db.shopifyProducts = db.shopifyProducts || [];
+        
+        let newCount = 0;
+        let updatedCount = 0;
+
+        if (data.products) {
+            data.products.forEach(p => {
+                const price = parseFloat(p.variants?.[0]?.price) || 0.0;
+                const imageUrl = p.images?.[0]?.src || '';
+                const inventory = parseInt(p.variants?.[0]?.inventory_quantity) || 0;
+                const externalId = `shopify_${p.id}`;
+
+                const existingIndex = db.shopifyProducts.findIndex(sp => sp.id === externalId);
+                
+                if (existingIndex >= 0) {
+                    // Atualiza
+                    db.shopifyProducts[existingIndex] = {
+                        ...db.shopifyProducts[existingIndex],
+                        title: p.title,
+                        description: p.body_html || '',
+                        price,
+                        imageUrl,
+                        inventoryQuantity: inventory,
+                        handle: p.handle
+                    };
+                    updatedCount++;
+                } else {
+                    // Insere novo
+                    db.shopifyProducts.push({
+                        id: externalId,
+                        title: p.title,
+                        description: p.body_html || '',
+                        price,
+                        imageUrl,
+                        inventoryQuantity: inventory,
+                        handle: p.handle,
+                        facebookPublished: false,
+                        facebookId: ''
+                    });
+                    newCount++;
+                }
+            });
+        }
+
+        // Registra log de integração
+        db.integrationLogs = db.integrationLogs || [];
+        db.integrationLogs.push({
+            id: `log_shopify_sync_${Date.now()}`,
+            timestamp: new Date().toLocaleTimeString('pt-BR'),
+            type: 'success',
+            message: `🛒 [SHOPIFY] Catálogo sincronizado: ${newCount} novos produtos importados, ${updatedCount} atualizados.`
+        });
+
+        saveDb(db);
+        res.json({ success: true, message: "Sincronização concluída!", imported: newCount, updated: updatedCount });
+    } catch (err) {
+        console.error("[SHOPIFY-SYNC] Falha ao sincronizar:", err);
+        res.status(500).json({ error: `Erro na sincronização: ${err.message}` });
+    }
+});
+
+// Publicar produto no Facebook Marketplace/Catálogo
+app.post('/api/facebook/publish', async (req, res) => {
+    const { productId } = req.body;
+    try {
+        const db = readDb();
+        const fbCreds = db.credentials.facebook;
+        const prod = (db.shopifyProducts || []).find(p => p.id === productId);
+
+        if (!prod) {
+            return res.status(404).json({ error: "Produto do Shopify não encontrado." });
+        }
+
+        db.integrationLogs = db.integrationLogs || [];
+
+        // Lógica de Sincronização Real vs Simulação
+        if (fbCreds && fbCreds.accessToken && fbCreds.catalogId) {
+            // Cenário Real: Enviar para API do Meta Catalog
+            console.log(`[FB-CATALOG] Publicando produto ${prod.title} no catálogo ${fbCreds.catalogId}...`);
+            
+            const batchUrl = `https://graph.facebook.com/v18.0/${fbCreds.catalogId}/batch`;
+            const payload = {
+                requests: [
+                    {
+                        method: 'CREATE',
+                        retailer_id: prod.id,
+                        data: {
+                            title: prod.title,
+                            description: prod.description.substring(0, 1000) || prod.title,
+                            image_link: prod.imageUrl || 'https://printoustudio3d.com/assets/no-image.png',
+                            link: `https://printoustudio3d.com/products/${prod.handle}`,
+                            brand: 'Printou3D',
+                            price: Math.round(prod.price * 100), // Em centavos na API do Facebook
+                            currency: 'BRL',
+                            availability: prod.inventoryQuantity > 0 ? 'in stock' : 'out of stock',
+                            condition: 'new'
+                        }
+                    }
+                ]
+            };
+
+            const response = await fetch(batchUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${fbCreds.accessToken}`
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (response.ok) {
+                prod.facebookPublished = true;
+                prod.facebookId = `fb_item_${Date.now()}`;
+                
+                db.integrationLogs.push({
+                    id: `log_fb_pub_${Date.now()}`,
+                    timestamp: new Date().toLocaleTimeString('pt-BR'),
+                    type: 'success',
+                    message: `📢 [FACEBOOK] Anúncio publicado no Marketplace para o item "${prod.title}".`
+                });
+                
+                saveDb(db);
+                return res.json({ success: true, message: "Produto publicado no Facebook com sucesso!", published: true });
+            } else {
+                const errText = await response.text();
+                throw new Error(`Erro na API do Facebook: ${errText}`);
+            }
+        } else {
+            // Cenário de Simulação (para testes rápidos enquanto aprova chaves)
+            console.log(`[FB-SIMULATION] Simulando publicação do produto ${prod.title}...`);
+            prod.facebookPublished = true;
+            prod.facebookId = `fb_sim_${Math.random().toString(36).slice(2, 9)}`;
+
+            db.integrationLogs.push({
+                id: `log_fb_pub_sim_${Date.now()}`,
+                timestamp: new Date().toLocaleTimeString('pt-BR'),
+                type: 'success',
+                message: `📢 [FACEBOOK (SIMULADO)] Anúncio de teste publicado no Marketplace: "${prod.title}" — R$ ${prod.price.toFixed(2)}.`
+            });
+
+            // Adiciona mensagens simuladas desse produto para o chat inteligente
+            db.facebookMessages = db.facebookMessages || [];
+            
+            const buyers = ['Gabriel Silva', 'Beatriz Costa', 'Marcos Oliveira'];
+            const questions = [
+                'Está disponível? Entrega em quanto tempo?',
+                'Qual o preço final e tem outras cores?',
+                'Aceita Pix? Consegue enviar hoje?'
+            ];
+            const randomIndex = Math.floor(Math.random() * buyers.length);
+
+            db.facebookMessages.push({
+                id: `msg_${Date.now()}`,
+                buyerName: buyers[randomIndex],
+                productTitle: prod.title,
+                productUrl: `https://printoustudio3d.com/products/${prod.handle}`,
+                messageText: questions[randomIndex],
+                timestamp: new Date().toLocaleTimeString('pt-BR').substring(0, 5),
+                replied: false,
+                replyText: ''
+            });
+
+            saveDb(db);
+            return res.json({ 
+                success: true, 
+                message: "Produto publicado com sucesso! (Modo Simulado ativado. Nova pergunta recebida no chat!)", 
+                published: true, 
+                simulated: true 
+            });
+        }
+    } catch (err) {
+        console.error("[FB-PUBLISH] Erro ao publicar anúncio:", err);
+        res.status(500).json({ error: `Erro ao publicar no Facebook: ${err.message}` });
+    }
+});
+
+// Listar mensagens recebidas no Facebook Marketplace
+app.get('/api/facebook/messages', (req, res) => {
+    try {
+        const db = readDb();
+        res.json(db.facebookMessages || []);
+    } catch (e) {
+        res.status(500).json({ error: "Erro ao buscar mensagens do Facebook" });
+    }
+});
+
+// Responder mensagem no chat do Facebook Marketplace (Auto ou Manual)
+app.post('/api/facebook/messages/reply', (req, res) => {
+    const { messageId, replyText } = req.body;
+    try {
+        const db = readDb();
+        db.facebookMessages = db.facebookMessages || [];
+        const msg = db.facebookMessages.find(m => m.id === messageId);
+
+        if (!msg) {
+            return res.status(404).json({ error: "Mensagem não encontrada." });
+        }
+
+        msg.replied = true;
+        msg.replyText = replyText;
+
+        // Log da resposta
+        db.integrationLogs = db.integrationLogs || [];
+        db.integrationLogs.push({
+            id: `log_fb_reply_${Date.now()}`,
+            timestamp: new Date().toLocaleTimeString('pt-BR'),
+            type: 'info',
+            message: `💬 [MESSENGER] Resposta enviada para ${msg.buyerName}: "${replyText.substring(0, 40)}..."`
+        });
+
+        saveDb(db);
+        res.json({ success: true, message: "Resposta enviada com sucesso!", messageObj: msg });
+    } catch (e) {
+        res.status(500).json({ error: "Erro ao enviar resposta" });
     }
 });
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { BarChart3, ShoppingBag, Printer, Sliders, Plus, Bolt, X, PieChart, Truck, Wallet, Sun, Moon, Package, Menu, DollarSign } from 'lucide-react';
+import { BarChart3, ShoppingBag, Printer, Sliders, Plus, Bolt, X, PieChart, Truck, Wallet, Sun, Moon, Package, Menu, DollarSign, Facebook } from 'lucide-react';
 import DashboardView from './components/Dashboard';
 import DashboardCharts from './components/DashboardCharts';
 import SalesListView from './components/SalesList';
@@ -12,6 +12,7 @@ import EstoqueView from './components/Estoque';
 import PricingSimulatorView from './components/PricingSimulator';
 import IntegrationsManagerView from './components/IntegrationsManager';
 import LoginScreenView from './components/LoginScreen';
+import FacebookMarketplaceView from './components/FacebookMarketplace';
 
 // --- DADOS INICIAIS DO LOCALSTORAGE (MOCK) ---
 const INITIAL_CHANNELS = [
@@ -499,6 +500,16 @@ function App() {
                             </button>
                         )}
 
+                        {isAdmin && (
+                            <button 
+                                onClick={() => setActiveTab('facebook')}
+                                className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-200 ${activeTab === 'facebook' ? 'bg-gradient-to-r from-[#7C3AED]/20 to-transparent border-l-4 border-[#7C3AED] text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                            >
+                                <Facebook className="w-5 h-5 text-[#7C3AED]" />
+                                <span className="font-semibold">Facebook Marketplace</span>
+                            </button>
+                        )}
+
                         <button 
                             onClick={() => setActiveTab('reports')}
                             className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-200 ${activeTab === 'reports' ? 'bg-gradient-to-r from-brand-orange/20 to-transparent border-l-4 border-brand-orange text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
@@ -652,6 +663,10 @@ function App() {
                             refreshDatabaseData();
                         }}
                     />
+                )}
+
+                {activeTab === 'facebook' && (
+                    <FacebookMarketplaceView />
                 )}
 
                 {activeTab === 'reports' && (
