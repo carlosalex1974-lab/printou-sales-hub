@@ -3490,13 +3490,14 @@
 
             const getUnit = (type) => {
                 if (type === 'resin') return 'ml';
-                if (type === 'unit' || type === 'other') return 'un';
+                if (type === 'unit' || type === 'other' || type === 'product') return 'un';
                 return 'g';
             };
 
             const getTypeLabel = (type) => {
                 if (type === 'resin') return 'Resina';
                 if (type === 'unit') return 'Componente';
+                if (type === 'product') return 'Produto Acabado';
                 if (type === 'other') return 'Outro Insumo';
                 return 'Filamento';
             };
@@ -3564,7 +3565,7 @@
                             <div className="md:col-span-2">
                                 <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Nome do Insumo / Material</label>
                                 <input 
-                                    type="text" required placeholder="Ex: Filamento PLA Azul, Resina Lavável 1L, Caixa Sedex 2"
+                                    type="text" required placeholder="Ex: Filamento PLA Azul, Resina Lavável 1L, Caixa Sedex 2, Action Figure Groot"
                                     value={newFilament.name} onChange={e => setNewFilament({...newFilament, name: e.target.value})}
                                     className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange"
                                 />
@@ -3576,9 +3577,9 @@
                                         const t = e.target.value;
                                         let defaultVal = '1000';
                                         let defaultAlert = '200';
-                                        if (t === 'unit') {
-                                            defaultVal = '100';
-                                            defaultAlert = '10';
+                                        if (t === 'unit' || t === 'product') {
+                                            defaultVal = '50';
+                                            defaultAlert = '5';
                                         }
                                         setNewFilament({
                                             ...newFilament, 
@@ -3593,6 +3594,7 @@
                                     <option value="filament">Filamento (g)</option>
                                     <option value="resin">Resina (ml)</option>
                                     <option value="unit">Componente / Unidade (un)</option>
+                                    <option value="product">Produto Acabado (un)</option>
                                     <option value="other">Outros Insumos</option>
                                 </select>
                             </div>
