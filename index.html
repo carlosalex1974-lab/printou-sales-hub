@@ -3748,7 +3748,6 @@
                 const [newSupplier, setNewSupplier] = useState({
                     name: '',
                     material: '',
-                    pricePerKg: '',
                     leadTime: '',
                     rating: '5.0'
                 });
@@ -3759,13 +3758,13 @@
                         id: 'sup' + (suppliers.length + 1) + Date.now().toString().slice(-2),
                         name: newSupplier.name,
                         material: newSupplier.material,
-                        pricePerKg: parseFloat(newSupplier.pricePerKg),
+                        pricePerKg: 0,
                         leadTime: newSupplier.leadTime,
                         rating: newSupplier.rating
                     };
                     setSuppliers([...suppliers, sup]);
                     setIsAdding(false);
-                    setNewSupplier({ name: '', material: '', pricePerKg: '', leadTime: '', rating: '5.0' });
+                    setNewSupplier({ name: '', material: '', leadTime: '', rating: '5.0' });
                 };
 
                 const handleDelete = (id) => {
@@ -3790,7 +3789,7 @@
                         </div>
 
                         {isAdding && (
-                            <form onSubmit={handleSaveSupplier} className="glass-panel border border-brand-orange/20 rounded-2xl p-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <form onSubmit={handleSaveSupplier} className="glass-panel border border-brand-orange/20 rounded-2xl p-6 grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div>
                                     <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Nome da Empresa</label>
                                     <input 
@@ -3808,14 +3807,6 @@
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Preço por Kg/Unid. (R$)</label>
-                                    <input 
-                                        type="number" step="0.01" required placeholder="Ex: 95.00"
-                                        value={newSupplier.pricePerKg} onChange={e => setNewSupplier({...newSupplier, pricePerKg: e.target.value})}
-                                        className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange"
-                                    />
-                                </div>
-                                <div>
                                     <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Prazo de Entrega</label>
                                     <input 
                                         type="text" required placeholder="Ex: 3 a 5 dias"
@@ -3823,7 +3814,7 @@
                                         className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange"
                                     />
                                 </div>
-                                <button type="submit" className="md:col-span-4 btn-gradient py-3 rounded-xl text-black font-bold uppercase tracking-wider">
+                                <button type="submit" className="md:col-span-3 btn-gradient py-3 rounded-xl text-black font-bold uppercase tracking-wider">
                                     Cadastrar Fornecedor
                                 </button>
                             </form>
@@ -3844,15 +3835,9 @@
                                             <i data-lucide="trash-2" className="w-4 h-4"></i>
                                         </button>
                                     </div>
-                                    <div className="bg-[#121215] p-3 rounded-xl border border-white/5 grid grid-cols-2 gap-2 text-center text-xs mb-4">
-                                        <div>
-                                            <p className="text-[10px] text-gray-500 font-bold uppercase">Preço Estimado</p>
-                                            <p className="font-semibold text-white">R$ {sup.pricePerKg.toFixed(2)}/kg</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-[10px] text-gray-500 font-bold uppercase">Prazo Médio</p>
-                                            <p className="font-semibold text-white">{sup.leadTime}</p>
-                                        </div>
+                                    <div className="bg-[#121215] p-3 rounded-xl border border-white/5 flex justify-between items-center text-xs mb-4">
+                                        <span className="text-[10px] text-gray-500 font-bold uppercase">Prazo Médio</span>
+                                        <span className="font-semibold text-white">{sup.leadTime}</span>
                                     </div>
                                     <div className="flex justify-between text-xs text-gray-400">
                                         <span>Avaliação do Suporte:</span>
