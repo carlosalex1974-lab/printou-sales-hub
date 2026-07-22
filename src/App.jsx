@@ -500,15 +500,13 @@ function App() {
                             </button>
                         )}
 
-                        {isAdmin && (
-                            <button 
-                                onClick={() => setActiveTab('facebook')}
-                                className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-200 ${activeTab === 'facebook' ? 'bg-gradient-to-r from-[#7C3AED]/20 to-transparent border-l-4 border-[#7C3AED] text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
-                            >
-                                <Facebook className="w-5 h-5 text-[#7C3AED]" />
-                                <span className="font-semibold">Facebook Marketplace</span>
-                            </button>
-                        )}
+                        <button 
+                            onClick={() => setActiveTab('facebook')}
+                            className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-200 ${activeTab === 'facebook' ? 'bg-gradient-to-r from-[#7C3AED]/20 to-transparent border-l-4 border-[#7C3AED] text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                        >
+                            <Facebook className="w-5 h-5 text-[#7C3AED]" />
+                            <span className="font-semibold">Facebook Marketplace</span>
+                        </button>
 
                         <button 
                             onClick={() => setActiveTab('reports')}
