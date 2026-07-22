@@ -127,11 +127,29 @@ app.post('/api/data', (req, res) => {
         const newData = req.body;
         const currentData = readDb();
         
-        // Mesclar dados enviados com credenciais, usuários e logs anteriores para evitar perda/apagamento
+        // Mesclar chaves individuais de credenciais para preservar tokens de acesso confidenciais
+        const mergedCredentials = { ...currentData.credentials };
+        if (newData.credentials) {
+            for (const key of Object.keys(newData.credentials)) {
+                const newAcc = newData.credentials[key];
+                const currAcc = currentData.credentials[key] || {};
+                
+                mergedCredentials[key] = {
+                    ...currAcc,
+                    ...newAcc,
+                    accessToken: newAcc.accessToken || currAcc.accessToken,
+                    refreshToken: newAcc.refreshToken || currAcc.refreshToken,
+                    tokenExpiresAt: newAcc.tokenExpiresAt || currAcc.tokenExpiresAt,
+                    userId: newAcc.userId || currAcc.userId,
+                    status: newAcc.accessToken || currAcc.accessToken || currAcc.accessToken ? 'Autorizado' : (newAcc.status || currAcc.status || 'Não Sincronizado')
+                };
+            }
+        }
+
         const mergedData = {
             ...currentData,
             ...newData,
-            credentials: newData.credentials || currentData.credentials,
+            credentials: mergedCredentials,
             users: newData.users || currentData.users,
             integrationLogs: newData.integrationLogs || currentData.integrationLogs
         };
