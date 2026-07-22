@@ -146,9 +146,20 @@ app.post('/api/data', (req, res) => {
             }
         }
 
+        const mergedSales = (newData.sales && newData.sales.length > 0) ? newData.sales : currentData.sales;
+        const mergedProducts = (newData.products && newData.products.length > 0) ? newData.products : currentData.products;
+        const mergedFilaments = (newData.filaments && newData.filaments.length > 0) ? newData.filaments : currentData.filaments;
+        const mergedSuppliers = (newData.suppliers && newData.suppliers.length > 0) ? newData.suppliers : currentData.suppliers;
+        const mergedExpenses = (newData.expenses && newData.expenses.length > 0) ? newData.expenses : currentData.expenses;
+
         const mergedData = {
             ...currentData,
             ...newData,
+            sales: mergedSales,
+            products: mergedProducts,
+            filaments: mergedFilaments,
+            suppliers: mergedSuppliers,
+            expenses: mergedExpenses,
             credentials: mergedCredentials,
             users: newData.users || currentData.users,
             integrationLogs: newData.integrationLogs || currentData.integrationLogs
