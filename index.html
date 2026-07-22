@@ -3484,8 +3484,22 @@
                 currentWeight: '1000',
                 alertThreshold: '200',
                 colorHex: '#30D158',
-                material: 'PLA'
+                material: 'PLA',
+                type: 'filament'
             });
+
+            const getUnit = (type) => {
+                if (type === 'resin') return 'ml';
+                if (type === 'unit' || type === 'other') return 'un';
+                return 'g';
+            };
+
+            const getTypeLabel = (type) => {
+                if (type === 'resin') return 'Resina';
+                if (type === 'unit') return 'Componente';
+                if (type === 'other') return 'Outro Insumo';
+                return 'Filamento';
+            };
 
             const handleSave = (e) => {
                 e.preventDefault();
@@ -3497,7 +3511,8 @@
                     currentWeight: parseFloat(newFilament.currentWeight) || 1000,
                     alertThreshold: parseFloat(newFilament.alertThreshold) || 200,
                     colorHex: newFilament.colorHex,
-                    material: newFilament.material
+                    material: newFilament.material,
+                    type: newFilament.type || 'filament'
                 };
                 setFilaments([...filaments, fil]);
                 setIsAdding(false);
@@ -3508,12 +3523,13 @@
                     currentWeight: '1000',
                     alertThreshold: '200',
                     colorHex: '#30D158',
-                    material: 'PLA'
+                    material: 'PLA',
+                    type: 'filament'
                 });
             };
 
             const handleDelete = (id) => {
-                if (confirm("Deseja realmente remover esta bobina do estoque?")) {
+                if (confirm("Deseja realmente remover este item do estoque?")) {
                     setFilaments(filaments.filter(f => f.id !== id));
                 }
             };
@@ -3525,43 +3541,68 @@
                 }
             };
 
+            const unit = getUnit(newFilament.type);
+
             return (
                 <div className="space-y-8 animate-fade-in">
                     <div className="flex justify-between items-center border-b border-brand-borderBg pb-4">
                         <div>
                             <span className="text-xs font-bold tracking-widest text-brand-orange uppercase">Logística & Materiais</span>
-                            <h3 className="font-black text-2xl text-gradient">Estoque de Filamentos</h3>
+                            <h3 className="font-black text-2xl text-gradient">Estoque & Insumos Gerais</h3>
                         </div>
                         <button 
                             onClick={() => setIsAdding(!isAdding)}
                             className="bg-brand-orange/10 border border-brand-orange/40 hover:bg-brand-orange/20 text-brand-orange px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all"
                         >
                             <i data-lucide={isAdding ? "minus" : "plus"} className="w-4 h-4"></i>
-                            {isAdding ? "Fechar Painel" : "Cadastrar Bobina"}
+                            {isAdding ? "Fechar Painel" : "Cadastrar Insumo"}
                         </button>
                     </div>
 
                     {isAdding && (
                         <form onSubmit={handleSave} className="glass-panel border border-white/15 rounded-2xl p-6 grid grid-cols-1 md:grid-cols-4 gap-4 animate-fade-in shadow-2xl">
                             <div className="md:col-span-2">
-                                <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Descrição / Cor do Filamento</label>
+                                <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Nome do Insumo / Material</label>
                                 <input 
-                                    type="text" required placeholder="Ex: PLA Vermelho Premium 1kg"
+                                    type="text" required placeholder="Ex: Filamento PLA Azul, Resina Lavável 1L, Caixa Sedex 2"
                                     value={newFilament.name} onChange={e => setNewFilament({...newFilament, name: e.target.value})}
                                     className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange"
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Material</label>
+                                <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Tipo de Insumo</label>
                                 <select 
-                                    value={newFilament.material} onChange={e => setNewFilament({...newFilament, material: e.target.value})}
+                                    value={newFilament.type} onChange={e => {
+                                        const t = e.target.value;
+                                        let defaultVal = '1000';
+                                        let defaultAlert = '200';
+                                        if (t === 'unit') {
+                                            defaultVal = '100';
+                                            defaultAlert = '10';
+                                        }
+                                        setNewFilament({
+                                            ...newFilament, 
+                                            type: t, 
+                                            initialWeight: defaultVal, 
+                                            currentWeight: defaultVal, 
+                                            alertThreshold: defaultAlert
+                                        });
+                                    }}
                                     className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange"
                                 >
-                                    <option value="PLA">PLA</option>
-                                    <option value="PETG">PETG</option>
-                                    <option value="ABS">ABS</option>
-                                    <option value="Flex">Flex / TPU</option>
+                                    <option value="filament">Filamento (g)</option>
+                                    <option value="resin">Resina (ml)</option>
+                                    <option value="unit">Componente / Unidade (un)</option>
+                                    <option value="other">Outros Insumos</option>
                                 </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Especificação / Material</label>
+                                <input 
+                                    type="text" placeholder="Ex: PLA, TPU, Plástico, Papelão"
+                                    value={newFilament.material} onChange={e => setNewFilament({...newFilament, material: e.target.value})}
+                                    className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange"
+                                />
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Fornecedor</label>
@@ -3576,7 +3617,7 @@
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Peso Inicial (g)</label>
+                                <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Quantidade Inicial ({unit})</label>
                                 <input 
                                     type="number" required
                                     value={newFilament.initialWeight} onChange={e => setNewFilament({...newFilament, initialWeight: e.target.value})}
@@ -3584,7 +3625,7 @@
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Peso Atual (g)</label>
+                                <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Quantidade Atual ({unit})</label>
                                 <input 
                                     type="number" required
                                     value={newFilament.currentWeight} onChange={e => setNewFilament({...newFilament, currentWeight: e.target.value})}
@@ -3592,7 +3633,7 @@
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Limite Crítico (g)</label>
+                                <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Limite Crítico ({unit})</label>
                                 <input 
                                     type="number" required
                                     value={newFilament.alertThreshold} onChange={e => setNewFilament({...newFilament, alertThreshold: e.target.value})}
@@ -3621,17 +3662,19 @@
                         </form>
                     )}
 
-                    {/* Listagem das Bobinas */}
+                    {/* Listagem das Bobinas / Insumos */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {filaments.length === 0 ? (
                             <div className="col-span-full text-center py-12 glass-panel">
                                 <i data-lucide="package" className="w-12 h-12 text-gray-500 mx-auto mb-4"></i>
-                                <p className="text-gray-400 text-sm font-semibold">Nenhuma bobina de filamento no estoque.</p>
+                                <p className="text-gray-400 text-sm font-semibold">Nenhum insumo ou material no estoque.</p>
                             </div>
                         ) : filaments.map(fil => {
                             const isLow = fil.currentWeight <= fil.alertThreshold;
                             const pct = Math.min((fil.currentWeight / fil.initialWeight) * 100, 100);
                             const supName = suppliers.find(s => s.id === fil.supplierId)?.name || 'Fornecedor Desconhecido';
+                            const itemUnit = getUnit(fil.type);
+                            const itemLabel = getTypeLabel(fil.type);
 
                             return (
                                 <div key={fil.id} className="glass-panel p-6 rounded-2xl flex flex-col justify-between border border-white/5 relative overflow-hidden">
@@ -3643,7 +3686,7 @@
                                                 <span className="w-4 h-4 rounded-full border border-white/10" style={{ backgroundColor: fil.colorHex }} title={fil.colorHex}></span>
                                                 <div>
                                                     <h4 className="font-extrabold text-white text-base leading-tight">{fil.name}</h4>
-                                                    <span className="text-[9px] text-gray-500 font-extrabold uppercase tracking-widest">{fil.material} • {supName}</span>
+                                                    <span className="text-[9px] text-gray-500 font-extrabold uppercase tracking-widest">{itemLabel} • {fil.material} • {supName}</span>
                                                 </div>
                                             </div>
                                             <button 
@@ -3656,9 +3699,9 @@
 
                                         <div className="space-y-2">
                                             <div className="flex justify-between text-xs font-bold text-gray-300">
-                                                <span>Peso Disponível:</span>
+                                                <span>Estoque Disponível:</span>
                                                 <span className={isLow ? "text-rose-400 font-black animate-pulse" : "text-emerald-400"}>
-                                                    {fil.currentWeight}g / {fil.initialWeight}g
+                                                    {fil.currentWeight}{itemUnit} / {fil.initialWeight}{itemUnit}
                                                 </span>
                                             </div>
 
@@ -3679,7 +3722,7 @@
 
                                         {/* Ajuste Manual Rápido */}
                                         <div className="bg-[#121215] border border-white/5 p-3 rounded-xl flex items-center justify-between gap-3">
-                                            <span className="text-[10px] text-gray-500 font-bold uppercase">Ajustar Peso (g):</span>
+                                            <span className="text-[10px] text-gray-500 font-bold uppercase">Ajustar Quantidade ({itemUnit}):</span>
                                             <input 
                                                 type="number" 
                                                 defaultValue={fil.currentWeight}
