@@ -517,8 +517,6 @@ app.post('/api/integration/logs/clear', (req, res) => {
     }
 });
 
-});
-
 // =====================================================
 // ENDPOINTS DO AGENTE COMERCIAL FACEBOOK & SHOPIFY
 // =====================================================
