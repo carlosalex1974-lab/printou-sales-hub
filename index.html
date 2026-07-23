@@ -3927,7 +3927,7 @@
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                         <div className="glass-panel p-6 rounded-2xl border border-white/5 flex items-center gap-4">
                             <div className="p-3 bg-brand-orange/10 text-brand-orange rounded-xl">
-                                <i data-lucide="shopping-bag" className="w-6 h-6"></i>
+                                <span className="text-xl">🛍️</span>
                             </div>
                             <div>
                                 <span className="text-[10px] text-gray-500 font-extrabold uppercase tracking-widest">Shopify Catálogo</span>
@@ -3937,7 +3937,7 @@
 
                         <div className="glass-panel p-6 rounded-2xl border border-white/5 flex items-center gap-4">
                             <div className="p-3 bg-emerald-500/10 text-emerald-400 rounded-xl">
-                                <i data-lucide="check-circle-2" className="w-6 h-6"></i>
+                                <span className="text-xl">✅</span>
                             </div>
                             <div>
                                 <span className="text-[10px] text-gray-500 font-extrabold uppercase tracking-widest">Publicados FB</span>
@@ -3947,7 +3947,7 @@
 
                         <div className="glass-panel p-6 rounded-2xl border border-white/5 flex items-center gap-4">
                             <div className="p-3 bg-rose-500/10 text-rose-400 rounded-xl">
-                                <i data-lucide="message-square" className="w-6 h-6"></i>
+                                <span className="text-xl">💬</span>
                             </div>
                             <div>
                                 <span className="text-[10px] text-gray-500 font-extrabold uppercase tracking-widest">Perguntas Pendentes</span>
@@ -3957,7 +3957,7 @@
 
                         <div className="glass-panel p-6 rounded-2xl border border-white/5 flex items-center gap-4">
                             <div className="p-3 bg-brand-yellow/10 text-brand-yellow rounded-xl">
-                                <i data-lucide="settings" className="w-6 h-6"></i>
+                                <span className="text-xl">⚙️</span>
                             </div>
                             <div>
                                 <span className="text-[10px] text-gray-500 font-extrabold uppercase tracking-widest">Status Conexão</span>
@@ -4000,7 +4000,7 @@
                         <div className="space-y-6">
                             {productsList.length === 0 ? (
                                 <div className="glass-panel p-12 text-center rounded-2xl border border-white/5 space-y-4">
-                                    <i data-lucide="shopping-bag" className="w-12 h-12 mx-auto text-gray-600 block"></i>
+                                    <span className="text-4xl block mb-2">🛍️</span>
                                     <div>
                                         <h4 className="text-lg font-bold text-white">Nenhum produto sincronizado do site</h4>
                                         <p className="text-sm text-gray-500 max-w-md mx-auto mt-1">
@@ -4124,7 +4124,7 @@
                                                 className="text-brand-orange hover:text-white flex items-center gap-1 text-[10px] font-bold uppercase"
                                             >
                                                 Ver no Site
-                                                <i data-lucide="external-link" className="w-3.5 h-3.5"></i>
+                                                <span className="text-xs">🔗</span>
                                             </a>
                                         </div>
 
@@ -4159,7 +4159,7 @@
                                                     onClick={generateAIReply}
                                                     className="bg-[#7C3AED]/10 hover:bg-[#7C3AED]/20 text-[#7C3AED] border border-[#7C3AED]/30 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase flex items-center gap-1.5 transition-all"
                                                 >
-                                                    <i data-lucide="bot" className="w-3.5 h-3.5"></i>
+                                                    <span className="text-xs">✨</span>
                                                     Gerar com IA Kika
                                                 </button>
                                             </div>
@@ -4176,7 +4176,7 @@
                                                     disabled={!replyText.trim()}
                                                     className="bg-[#7C3AED] text-black font-bold px-5 rounded-xl hover:bg-[#7C3AED]/90 transition-all disabled:opacity-50 flex items-center justify-center"
                                                 >
-                                                    <i data-lucide="send" className="w-4 h-4"></i>
+                                                    <span className="text-sm">📤</span>
                                                 </button>
                                             </form>
                                         </div>
