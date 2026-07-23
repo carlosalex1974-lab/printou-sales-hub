@@ -513,7 +513,12 @@
                 
                 let fee = 0;
                 if (chan) {
-                    fee = (sale.grossValue * (chan.commission / 100)) + chan.fixedFee;
+                    let fixedFee = chan.fixedFee;
+                    // Regra Mercado Livre: Sem taxa fixa para vendas >= R$ 79
+                    if ((chan.id.startsWith('ml') || chan.name.toLowerCase().includes('mercado')) && sale.grossValue >= 79) {
+                        fixedFee = 0;
+                    }
+                    fee = (sale.grossValue * (chan.commission / 100)) + fixedFee;
                 }
                 
                 // Se o frete registrado for 0, usa a regra configurada do canal como fallback
@@ -1071,12 +1076,15 @@
                 </div>
             );
 
-            // Helpers para estimativas do Modal
             function calculateEstimatedFees() {
                 const chan = channels.find(c => c.id === newSale.channelId);
                 const val = parseFloat(newSale.grossValue) || 0;
                 if (!chan) return 0;
-                return (val * (chan.commission / 100)) + chan.fixedFee;
+                let fixedFee = chan.fixedFee;
+                if ((chan.id.startsWith('ml') || chan.name.toLowerCase().includes('mercado')) && val >= 79) {
+                    fixedFee = 0;
+                }
+                return (val * (chan.commission / 100)) + fixedFee;
             }
 
             function calculateEstimatedCost() {
@@ -2444,7 +2452,11 @@
             const channelSimulations = useMemo(() => {
                 const saleVal = parseFloat(customSalePrice) || 0;
                 return channels.map(chan => {
-                    const commissionFee = (saleVal * (chan.commission / 100)) + chan.fixedFee;
+                    let fixedFee = chan.fixedFee;
+                    if ((chan.id.startsWith('ml') || chan.name.toLowerCase().includes('mercado')) && saleVal >= 79) {
+                        fixedFee = 0;
+                    }
+                    const commissionFee = (saleVal * (chan.commission / 100)) + fixedFee;
                     
                     let shippingFee = 0;
                     if (chan.hasFreeShippingThreshold) {
