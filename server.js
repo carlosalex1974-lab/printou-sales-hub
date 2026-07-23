@@ -648,6 +648,72 @@ app.post('/api/facebook/sync-shopify', async (req, res) => {
     }
 });
 
+// Salvar produtos sincronizados diretamente pelo navegador (Fallback Sem Chaves)
+app.post('/api/facebook/save-shopify-products', (req, res) => {
+    try {
+        const { products } = req.body;
+        if (!products || !Array.isArray(products)) {
+            return res.status(400).json({ error: "Lista de produtos inválida." });
+        }
+
+        const db = readDb();
+        db.shopifyProducts = db.shopifyProducts || [];
+
+        let newCount = 0;
+        let updatedCount = 0;
+
+        products.forEach(p => {
+            const price = parseFloat(p.variants?.[0]?.price) || 0.0;
+            const imageUrl = p.images?.[0]?.src || p.image?.src || '';
+            const inventory = parseInt(p.variants?.[0]?.inventory_quantity) || 10; // Fallback se não exposto publicamente
+            const externalId = `shopify_${p.id}`;
+
+            const existingIndex = db.shopifyProducts.findIndex(sp => sp.id === externalId);
+
+            if (existingIndex >= 0) {
+                db.shopifyProducts[existingIndex] = {
+                    ...db.shopifyProducts[existingIndex],
+                    title: p.title,
+                    description: p.body_html || '',
+                    price,
+                    imageUrl,
+                    inventoryQuantity: inventory,
+                    handle: p.handle
+                };
+                updatedCount++;
+            } else {
+                db.shopifyProducts.push({
+                    id: externalId,
+                    title: p.title,
+                    description: p.body_html || '',
+                    price,
+                    imageUrl,
+                    inventoryQuantity: inventory,
+                    handle: p.handle,
+                    facebookPublished: false,
+                    facebookId: ''
+                });
+                newCount++;
+            }
+        });
+
+        // Registrar log de integração
+        db.integrationLogs = db.integrationLogs || [];
+        db.integrationLogs.push({
+            id: `log_shopify_sync_browser_${Date.now()}`,
+            timestamp: new Date().toLocaleTimeString('pt-BR'),
+            type: 'success',
+            message: `🛒 [SHOPIFY-NAVEGADOR] Sincronização direta concluída: ${newCount} novos produtos importados, ${updatedCount} atualizados.`
+        });
+
+        saveDb(db);
+        res.json({ success: true, message: "Sincronização via navegador salva com sucesso!", imported: newCount, updated: updatedCount });
+    } catch (e) {
+        console.error("[FB-SYNC-BROWSER] Erro ao salvar produtos do site:", e);
+        res.status(500).json({ error: `Erro ao salvar produtos do site: ${e.message}` });
+    }
+});
+
 // Publicar produto no Facebook Marketplace/Catálogo
 app.post('/api/facebook/publish', async (req, res) => {
     const { productId } = req.body;

@@ -3764,16 +3764,47 @@
             const handleSyncShopify = async () => {
                 setIsLoadingProducts(true);
                 try {
+                    // Tenta via servidor primeiro
                     const res = await fetch('/api/facebook/sync-shopify', { method: 'POST' });
-                    const data = await res.json();
-                    if (res.ok) {
-                        showMessage(`Sincronização concluída! ${data.imported} novos produtos importados do Shopify.`);
+                    const data = res.ok ? await res.json() : null;
+
+                    if (data && data.success) {
+                        showMessage(`Sincronização concluída via servidor! ${data.imported} novos produtos importados.`);
+                        fetchProducts();
+                        return;
+                    }
+
+                    // Fallback: Sincronização direta pelo navegador usando o feed público
+                    console.log("[SHOPIFY-FALLBACK] Sincronização via servidor falhou. Iniciando busca direta pelo navegador...");
+                    
+                    const clientRes = await fetch('https://printoustudio3d.com/products.json?limit=100');
+                    if (!clientRes.ok) {
+                        throw new Error("Não foi possível acessar o feed público de produtos do site.");
+                    }
+
+                    const clientData = await clientRes.json();
+                    if (!clientData.products || clientData.products.length === 0) {
+                        throw new Error("Nenhum produto exposto no feed público do site.");
+                    }
+
+                    // Envia os produtos para o servidor salvar no banco
+                    const saveRes = await fetch('/api/facebook/save-shopify-products', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ products: clientData.products })
+                    });
+
+                    if (saveRes.ok) {
+                        const saveData = await saveRes.json();
+                        showMessage(`Sincronização concluída via navegador! ${saveData.imported} novos produtos importados.`);
                         fetchProducts();
                     } else {
-                        showMessage(data.error || "Erro ao conectar com o Shopify.", true);
+                        const saveErr = await saveRes.json();
+                        throw new Error(saveErr.error || "Erro ao salvar produtos no servidor.");
                     }
                 } catch (e) {
-                    showMessage(e.message, true);
+                    console.error("[SHOPIFY-FALLBACK-ERR]", e);
+                    showMessage("Erro na sincronização: " + e.message, true);
                 } finally {
                     setIsLoadingProducts(false);
                 }
