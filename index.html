@@ -610,7 +610,7 @@
                 e.preventDefault();
                 const saleToAdd = {
                     id: 's' + (sales.length + 1) + Date.now().toString().slice(-3),
-                    date: new Date().toISOString().split('T')[0],
+                    date: new Date().toISOString(),
                     channelId: newSale.channelId,
                     productId: newSale.productId,
                     quantity: parseInt(newSale.quantity),
@@ -1824,8 +1824,8 @@
                                     return (
                                         <tr key={sale.id} className="hover:bg-white/[0.02] transition-colors">
                                             <td className="py-4 text-xs font-bold text-gray-400">
-                                                <div>{dateDisplay}</div>
-                                                <div className="text-[10px] text-gray-500 font-normal mt-0.5">{timeDisplay}</div>
+                                                <span>{dateDisplay}</span>
+                                                {timeDisplay !== '--:--' && <span className="text-[10px] text-gray-500 font-normal ml-2">({timeDisplay})</span>}
                                             </td>
                                             <td className="py-4 font-semibold" style={{ color: chan?.color }}>
                                                 {chan?.name || 'Excluído'}
