@@ -746,6 +746,10 @@ app.delete('/api/facebook/products/:id', (req, res) => {
         }
         
         saveDb(db);
+        res.json({ success: true, message: "Produto removido com sucesso!" });
+    } catch (e) {
+        console.error("[FB-DELETE-PRODUCT] Erro ao deletar:", e);
+        res.status(500).json({ error: `Erro ao deletar produto: ${e.message}` });
     }
 });
 
