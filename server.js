@@ -714,6 +714,26 @@ app.post('/api/facebook/save-shopify-products', (req, res) => {
     }
 });
 
+// Excluir um produto do catálogo local
+app.delete('/api/facebook/products/:id', (req, res) => {
+    const { id } = req.params;
+    try {
+        const db = readDb();
+        const initialLength = (db.shopifyProducts || []).length;
+        db.shopifyProducts = (db.shopifyProducts || []).filter(p => p.id !== id);
+        
+        if (db.shopifyProducts.length === initialLength) {
+            return res.status(404).json({ error: "Produto não encontrado." });
+        }
+        
+        saveDb(db);
+        res.json({ success: true, message: "Produto removido com sucesso!" });
+    } catch (e) {
+        console.error("[FB-DELETE-PRODUCT] Erro ao deletar:", e);
+        res.status(500).json({ error: `Erro ao deletar produto: ${e.message}` });
+    }
+});
+
 // Publicar produto no Facebook Marketplace/Catálogo
 app.post('/api/facebook/publish', async (req, res) => {
     const { productId } = req.body;

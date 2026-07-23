@@ -3827,6 +3827,22 @@
                 }
             };
 
+            const handleDeleteProduct = async (id) => {
+                if (!confirm("Deseja remover este produto do painel do Facebook Marketplace?")) return;
+                try {
+                    const res = await fetch(`/api/facebook/products/${id}`, { method: 'DELETE' });
+                    if (res.ok) {
+                        showMessage("Produto removido com sucesso!");
+                        fetchProducts();
+                    } else {
+                        const data = await res.json();
+                        showMessage(data.error || "Erro ao remover o produto.", true);
+                    }
+                } catch (e) {
+                    showMessage(e.message, true);
+                }
+            };
+
             const handlePublishProduct = async (id) => {
                 setPublishingId(id);
                 try {
@@ -4047,25 +4063,35 @@
                                                     </div>
                                                 </div>
 
-                                                <button
-                                                    onClick={() => handlePublishProduct(prod.id)}
-                                                    disabled={publishingId === prod.id}
-                                                    className={`w-full py-3 rounded-xl font-bold uppercase tracking-wider text-xs transition-all flex items-center justify-center gap-2 ${prod.facebookPublished ? 'bg-white/5 border border-[#7C3AED]/30 text-white hover:bg-[#7C3AED]/10' : 'btn-gradient text-black'}`}
-                                                >
-                                                    {publishingId === prod.id ? (
-                                                        <>
-                                                            <div className="w-4 h-4 border-2 border-t-transparent border-white rounded-full animate-spin"></div>
-                                                            Publicando...
-                                                        </>
-                                                    ) : prod.facebookPublished ? (
-                                                        <>
-                                                            <span className="text-[#7C3AED]">✅</span>
-                                                            Publicar Novamente
-                                                        </>
-                                                    ) : (
-                                                        'Publicar no Marketplace'
-                                                    )}
-                                                </button>
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={() => handlePublishProduct(prod.id)}
+                                                        disabled={publishingId === prod.id}
+                                                        className={`flex-1 py-3 rounded-xl font-bold uppercase tracking-wider text-xs transition-all flex items-center justify-center gap-2 ${prod.facebookPublished ? 'bg-white/5 border border-[#7C3AED]/30 text-white hover:bg-[#7C3AED]/10' : 'btn-gradient text-black'}`}
+                                                    >
+                                                        {publishingId === prod.id ? (
+                                                            <>
+                                                                <div className="w-4 h-4 border-2 border-t-transparent border-white rounded-full animate-spin"></div>
+                                                                Publicando...
+                                                            </>
+                                                        ) : prod.facebookPublished ? (
+                                                            <>
+                                                                <span className="text-[#7C3AED]">✅</span>
+                                                                Publicar Novamente
+                                                            </>
+                                                        ) : (
+                                                            'Publicar no Marketplace'
+                                                        )}
+                                                    </button>
+                                                    
+                                                    <button
+                                                        onClick={() => handleDeleteProduct(prod.id)}
+                                                        title="Excluir produto do painel"
+                                                        className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 px-3.5 rounded-xl transition-all flex items-center justify-center"
+                                                    >
+                                                        <span>🗑️</span>
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     ))}
