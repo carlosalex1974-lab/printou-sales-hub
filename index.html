@@ -235,6 +235,23 @@
     <div id="root"></div>
 
     <script type="text/babel">
+        // Interceptador global de erros para depurar tela branca
+        window.addEventListener('error', function(event) {
+            const errDiv = document.createElement('div');
+            errDiv.style.position = 'fixed';
+            errDiv.style.top = '0';
+            errDiv.style.left = '0';
+            errDiv.style.width = '100%';
+            errDiv.style.backgroundColor = '#F43F5E';
+            errDiv.style.color = '#FFFFFF';
+            errDiv.style.padding = '20px';
+            errDiv.style.zIndex = '99999';
+            errDiv.style.fontFamily = 'monospace';
+            errDiv.style.whiteSpace = 'pre-wrap';
+            errDiv.innerHTML = '<h3>🚨 Erro Crítico de Código:</h3>' + event.message + '<br/><br/><strong>Local:</strong> ' + event.filename + ':' + event.lineno + ':' + event.colno + '<br/><br/><strong>Erro:</strong> ' + (event.error ? event.error.stack : 'N/A');
+            document.body.appendChild(errDiv);
+        });
+
         const { useState, useEffect, useMemo } = React;
 
         // --- DADOS INICIAIS DO LOCALSTORAGE (MOCK) ---
@@ -4016,7 +4033,7 @@
                                                 <div className="flex justify-between items-center bg-white/5 p-3 rounded-xl border border-white/5">
                                                     <div>
                                                         <span className="block text-[8px] text-gray-500 font-extrabold uppercase">Preço no Site</span>
-                                                        <span className="text-white font-black text-sm">R$ {prod.price.toFixed(2)}</span>
+                                                        <span className="text-white font-black text-sm">R$ {(Number(prod.price) || 0).toFixed(2)}</span>
                                                     </div>
                                                     <div className="text-right">
                                                         <span className="block text-[8px] text-gray-500 font-extrabold uppercase">Estoque</span>
