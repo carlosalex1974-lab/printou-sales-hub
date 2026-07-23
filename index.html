@@ -3890,13 +3890,13 @@
                     {/* Notificações flutuantes */}
                     {successMessage && (
                         <div className="fixed bottom-4 right-4 bg-emerald-500/90 backdrop-blur text-white px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 z-50 animate-bounce">
-                            <i data-lucide="check-circle-2" className="w-5 h-5"></i>
+                            <span className="text-lg font-bold">✅</span>
                             <span className="text-sm font-bold">{successMessage}</span>
                         </div>
                     )}
                     {errorMessage && (
                         <div className="fixed bottom-4 right-4 bg-rose-500/90 backdrop-blur text-white px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 z-50 animate-bounce">
-                            <i data-lucide="alert-triangle" className="w-5 h-5"></i>
+                            <span className="text-lg font-bold">⚠️</span>
                             <span className="text-sm font-bold">{errorMessage}</span>
                         </div>
                     )}
@@ -3913,7 +3913,11 @@
                                 disabled={isLoadingProducts}
                                 className="bg-[#16161A] border border-brand-orange/30 text-white px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-brand-orange/10 transition-all disabled:opacity-50"
                             >
-                                <i data-lucide="refresh-cw" className={`w-4 h-4 ${isLoadingProducts ? 'animate-spin' : ''}`}></i>
+                                {isLoadingProducts ? (
+                                    <div className="w-4 h-4 border-2 border-t-transparent border-white rounded-full animate-spin"></div>
+                                ) : (
+                                    <span>🔄</span>
+                                )}
                                 Sincronizar Shopify
                             </button>
                         </div>
@@ -4050,12 +4054,12 @@
                                                 >
                                                     {publishingId === prod.id ? (
                                                         <>
-                                                            <i data-lucide="refresh-cw" className="w-4 h-4 animate-spin"></i>
+                                                            <div className="w-4 h-4 border-2 border-t-transparent border-white rounded-full animate-spin"></div>
                                                             Publicando...
                                                         </>
                                                     ) : prod.facebookPublished ? (
                                                         <>
-                                                            <i data-lucide="check-circle-2" className="w-4 h-4 text-[#7C3AED]"></i>
+                                                            <span className="text-[#7C3AED]">✅</span>
                                                             Publicar Novamente
                                                         </>
                                                     ) : (
