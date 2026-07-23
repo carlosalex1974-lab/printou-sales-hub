@@ -333,12 +333,31 @@ app.post('/api/webhooks/:provider', async (req, res) => {
                     });
                     if (shipRes.ok) {
                         const shipData = await shipRes.json();
-                        if (shipData.shipping_option && shipData.shipping_option.cost !== undefined) {
-                            shipping = shipData.shipping_option.cost;
+                        // Se o frete foi grátis para o comprador (custo 0), o custo cobrado do vendedor fica em base_cost ou cost
+                        if (orderData.shipping.free_shipping || (shipData.shipping_option && shipData.shipping_option.cost === 0)) {
+                            shipping = parseFloat(shipData.base_cost) || parseFloat(shipData.cost) || 0.0;
+                        } else if (shipData.shipping_option && shipData.shipping_option.cost !== undefined) {
+                            shipping = parseFloat(shipData.shipping_option.cost);
                         }
                     }
                 } catch (shipErr) {
                     console.warn("Não foi possível buscar custos de envio detalhados:", shipErr);
+                }
+            }
+
+            // Fallback para regras do canal cadastradas se o frete for importado como zero
+            if (shipping === 0) {
+                const chan = db.channels.find(c => c.id === channelId);
+                if (chan) {
+                    if (chan.hasFreeShippingThreshold) {
+                        if (grossValue >= chan.freeShippingThreshold) {
+                            shipping = chan.defaultSellerShippingCost || 0.0;
+                        } else {
+                            shipping = chan.defaultBelowThresholdShippingCost || 0.0;
+                        }
+                    } else {
+                        shipping = chan.defaultSellerShippingCost || 0.0;
+                    }
                 }
             }
             
@@ -727,10 +746,40 @@ app.delete('/api/facebook/products/:id', (req, res) => {
         }
         
         saveDb(db);
-        res.json({ success: true, message: "Produto removido com sucesso!" });
+    }
+});
+
+// Endpoint do Feed de Catálogo do Facebook (CSV para Sincronização sem Token)
+app.get('/api/facebook/catalog.csv', (req, res) => {
+    try {
+        const db = readDb();
+        const products = db.shopifyProducts || [];
+        
+        let csv = 'id,title,description,availability,condition,price,link,image_link,brand\n';
+        
+        products.forEach(p => {
+            const id = p.id;
+            // Limpa quebras de linha e aspas no título
+            const title = `"${p.title.replace(/"/g, '""').replace(/\r?\n|\r/g, ' ')}"`;
+            // Remove tags HTML e formata a descrição
+            const cleanDesc = p.description ? p.description.replace(/<[^>]*>/g, '').replace(/\r?\n|\r/g, ' ') : 'Sem descrição';
+            const description = `"${cleanDesc.replace(/"/g, '""').substring(0, 1000)}"`;
+            const availability = p.inventoryQuantity > 0 ? 'in stock' : 'out of stock';
+            const condition = 'new';
+            const price = `${Number(p.price).toFixed(2)} BRL`;
+            const link = `https://printoustudio3d.com/products/${p.handle || ''}`;
+            const image_link = p.imageUrl || 'https://printoustudio3d.com/assets/no-image.png';
+            const brand = 'PrintouStudio3D';
+            
+            csv += `${id},${title},${description},${availability},${condition},${price},${link},${image_link},${brand}\n`;
+        });
+        
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', 'attachment; filename=catalog.csv');
+        res.send(csv);
     } catch (e) {
-        console.error("[FB-DELETE-PRODUCT] Erro ao deletar:", e);
-        res.status(500).json({ error: `Erro ao deletar produto: ${e.message}` });
+        console.error("[FB-CSV-CATALOG] Erro ao gerar catalog.csv:", e);
+        res.status(500).send("Erro ao gerar catálogo.");
     }
 });
 
@@ -1087,12 +1136,31 @@ async function pollMercadoLivreOrders() {
                         });
                         if (shipRes.ok) {
                             const shipData = await shipRes.json();
-                            if (shipData.shipping_option && shipData.shipping_option.cost !== undefined) {
-                                shipping = shipData.shipping_option.cost;
+                            // Se o frete foi grátis para o comprador (custo 0), o custo cobrado do vendedor fica em base_cost ou cost
+                            if (order.shipping.free_shipping || (shipData.shipping_option && shipData.shipping_option.cost === 0)) {
+                                shipping = parseFloat(shipData.base_cost) || parseFloat(shipData.cost) || 0.0;
+                            } else if (shipData.shipping_option && shipData.shipping_option.cost !== undefined) {
+                                shipping = parseFloat(shipData.shipping_option.cost);
                             }
                         }
                     } catch (e) {
                         // ignora erro de frete
+                    }
+                }
+
+                // Fallback para regras do canal cadastradas se o frete for importado como zero
+                if (shipping === 0) {
+                    const chan = freshDb.channels.find(c => c.id === channelId);
+                    if (chan) {
+                        if (chan.hasFreeShippingThreshold) {
+                            if (grossValue >= chan.freeShippingThreshold) {
+                                shipping = chan.defaultSellerShippingCost || 0.0;
+                            } else {
+                                shipping = chan.defaultBelowThresholdShippingCost || 0.0;
+                            }
+                        } else {
+                            shipping = chan.defaultSellerShippingCost || 0.0;
+                        }
                     }
                 }
 

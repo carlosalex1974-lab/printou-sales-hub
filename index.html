@@ -516,13 +516,27 @@
                     fee = (sale.grossValue * (chan.commission / 100)) + chan.fixedFee;
                 }
                 
-                const shipping = parseFloat(sale.shipping) || 0;
+                // Se o frete registrado for 0, usa a regra configurada do canal como fallback
+                let shipping = parseFloat(sale.shipping) || 0;
+                if (shipping === 0 && chan) {
+                    if (chan.hasFreeShippingThreshold) {
+                        if (sale.grossValue >= chan.freeShippingThreshold) {
+                            shipping = chan.defaultSellerShippingCost || 0;
+                        } else {
+                            shipping = chan.defaultBelowThresholdShippingCost || 0;
+                        }
+                    } else {
+                        shipping = chan.defaultSellerShippingCost || 0;
+                    }
+                }
+                
                 const netProfit = sale.status === 'Cancelado' ? 0 : parseFloat((sale.grossValue - fee - productCostTotal - shipping).toFixed(2));
                 
                 return {
                     productCost: productCostTotal,
                     fees: fee,
-                    netProfit: netProfit
+                    netProfit: netProfit,
+                    shippingApplied: shipping
                 };
             };
 
@@ -542,7 +556,7 @@
                         totalGross += sale.grossValue;
                         totalNet += fin.netProfit;
                         totalFees += fin.fees;
-                        totalShipping += parseFloat(sale.shipping) || 0;
+                        totalShipping += fin.shippingApplied;
                         activeSalesCount++;
                     }
                 });
@@ -3485,7 +3499,7 @@
                         totalGross += sale.grossValue;
                         totalCost += fin.productCost;
                         totalFees += fin.fees;
-                        totalShipping += (parseFloat(sale.shipping) || 0);
+                        totalShipping += (fin.shippingApplied || 0);
                         activeSalesCount++;
                     }
                 });
