@@ -433,24 +433,31 @@
             // Lógica de cálculo de frete sugerido automático no lançamento de vendas
             useEffect(() => {
                 const chan = channels.find(c => c.id === newSale.channelId);
+                const prod = products.find(p => p.id === newSale.productId);
+                
                 if (chan) {
                     const gross = parseFloat(newSale.grossValue) || 0;
+                    // Tenta usar o custo de frete específico do produto se configurado, senão usa o padrão do canal
+                    const productShipping = (prod && prod.customShippingCost !== undefined && prod.customShippingCost > 0) 
+                        ? prod.customShippingCost 
+                        : (chan.defaultSellerShippingCost || 0);
+
                     let suggestedShipping = 0;
                     if (chan.hasFreeShippingThreshold) {
                         if (gross >= chan.freeShippingThreshold) {
-                            suggestedShipping = chan.defaultSellerShippingCost;
+                            suggestedShipping = productShipping;
                         } else {
-                            suggestedShipping = chan.defaultBelowThresholdShippingCost;
+                            suggestedShipping = chan.defaultBelowThresholdShippingCost || 0;
                         }
                     } else {
-                        suggestedShipping = chan.defaultSellerShippingCost || 0;
+                        suggestedShipping = productShipping || 0;
                     }
                     
                     if (parseFloat(newSale.shipping) !== suggestedShipping && newSale.shipping !== suggestedShipping.toFixed(2)) {
                         setNewSale(prev => ({ ...prev, shipping: suggestedShipping.toFixed(2) }));
                     }
                 }
-            }, [newSale.channelId, newSale.grossValue, channels]);
+            }, [newSale.channelId, newSale.grossValue, newSale.productId, channels, products]);
 
             // Sincronização geral com LocalStorage e Banco de Dados Local (com debounce de 100ms)
             useEffect(() => {
@@ -521,17 +528,21 @@
                     fee = (sale.grossValue * (chan.commission / 100)) + fixedFee;
                 }
                 
-                // Se o frete registrado for 0, usa a regra configurada do canal como fallback
+                // Se o frete registrado for 0, usa a regra configurada do canal/produto como fallback
                 let shipping = parseFloat(sale.shipping) || 0;
                 if (shipping === 0 && chan) {
+                    const productShipping = (prod && prod.customShippingCost !== undefined && prod.customShippingCost > 0)
+                        ? prod.customShippingCost
+                        : (chan.defaultSellerShippingCost || 0);
+
                     if (chan.hasFreeShippingThreshold) {
                         if (sale.grossValue >= chan.freeShippingThreshold) {
-                            shipping = chan.defaultSellerShippingCost || 0;
+                            shipping = productShipping;
                         } else {
                             shipping = chan.defaultBelowThresholdShippingCost || 0;
                         }
                     } else {
-                        shipping = chan.defaultSellerShippingCost || 0;
+                        shipping = productShipping || 0;
                     }
                 }
                 
@@ -1899,6 +1910,7 @@
                 packagingCost: '2.50',
                 failRate: '10',
                 acquisitionCost: '',
+                customShippingCost: '0.00',
                 filamentId: filaments[0]?.id || '',
                 image: ''
             });
@@ -1932,6 +1944,7 @@
                     packagingCost: newProduct.type === '3d' ? parseFloat(newProduct.packagingCost) : 0,
                     failRate: newProduct.type === '3d' ? parseFloat(newProduct.failRate) || 0 : 0,
                     acquisitionCost: newProduct.type === 'resale' ? parseFloat(newProduct.acquisitionCost) : 0,
+                    customShippingCost: parseFloat(newProduct.customShippingCost) || 0,
                     filamentId: newProduct.type === '3d' ? newProduct.filamentId : undefined,
                     image: newProduct.image || ''
                 };
@@ -1949,6 +1962,7 @@
                     packagingCost: '2.50',
                     failRate: '10',
                     acquisitionCost: '',
+                    customShippingCost: '0.00',
                     filamentId: filaments[0]?.id || '',
                     image: ''
                 });
@@ -1968,6 +1982,7 @@
                     packagingCost: editingProduct.type === '3d' ? parseFloat(editingProduct.packagingCost) : 0,
                     failRate: editingProduct.type === '3d' ? parseFloat(editingProduct.failRate) || 0 : 0,
                     acquisitionCost: editingProduct.type === 'resale' ? parseFloat(editingProduct.acquisitionCost) : 0,
+                    customShippingCost: parseFloat(editingProduct.customShippingCost) || 0,
                     filamentId: editingProduct.type === '3d' ? editingProduct.filamentId : undefined,
                     image: editingProduct.image || '',
                     isPendingConfig: false
@@ -1987,6 +2002,7 @@
                     packagingCost: prod.packagingCost !== undefined ? String(prod.packagingCost) : '2.50',
                     failRate: prod.failRate !== undefined ? String(prod.failRate) : '10',
                     acquisitionCost: prod.acquisitionCost !== undefined ? String(prod.acquisitionCost) : '',
+                    customShippingCost: prod.customShippingCost !== undefined ? String(prod.customShippingCost) : '0.00',
                     filamentId: prod.filamentId || filaments[0]?.id || '',
                     image: prod.image || ''
                 });
@@ -2226,6 +2242,19 @@
                                 </div>
                             )}
 
+                            <div>
+                                <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2">Frete Pago no Canal / ML (R$)</label>
+                                <input 
+                                    type="number" step="0.01" placeholder="0.00"
+                                    value={activeForm.customShippingCost}
+                                    onChange={e => {
+                                        if (isEditing) setEditingProduct({ ...editingProduct, customShippingCost: e.target.value });
+                                        else setNewProduct({ ...newProduct, customShippingCost: e.target.value });
+                                    }}
+                                    className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange"
+                                />
+                            </div>
+
                             <button 
                                 type="submit"
                                 className="md:col-span-4 btn-gradient py-3.5 rounded-xl font-extrabold text-black uppercase tracking-widest text-xs md:text-sm"
@@ -2333,7 +2362,7 @@
                                             </div>
                                         ) : (
                                             /* Métricas Gerais de Custos */
-                                            <div className="grid grid-cols-3 gap-4 border-y border-white/5 py-3">
+                                            <div className="grid grid-cols-4 gap-4 border-y border-white/5 py-3">
                                                 <div>
                                                     <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider block mb-0.5">{isResale ? "Método" : "Material"}</span>
                                                     <span className="text-sm font-bold text-white">{isResale ? "Compra Direta" : `${prod.weight}g`}</span>
@@ -2345,6 +2374,10 @@
                                                 <div>
                                                     <span className="text-[9px] text-brand-orange font-bold uppercase tracking-wider block mb-0.5">Preço Custo</span>
                                                     <span className="text-sm font-extrabold text-brand-orange">R$ {cost.toFixed(2)}</span>
+                                                </div>
+                                                <div>
+                                                    <span className="text-[9px] text-amber-400 font-bold uppercase tracking-wider block mb-0.5">Frete ML/Canal</span>
+                                                    <span className="text-sm font-bold text-amber-400">R$ {(prod.customShippingCost || 0).toFixed(2)}</span>
                                                 </div>
                                             </div>
                                         )}
@@ -2405,6 +2438,7 @@
             const [packaging, setPackaging] = useState('2.50');
 
             const [acquisitionCost, setAcquisitionCost] = useState('50.00');
+            const [customShippingCost, setCustomShippingCost] = useState('0.00');
             const [customSalePrice, setCustomSalePrice] = useState('150.00');
 
             React.useEffect(() => {
@@ -2451,6 +2485,7 @@
 
             const channelSimulations = useMemo(() => {
                 const saleVal = parseFloat(customSalePrice) || 0;
+                const simShipping = parseFloat(customShippingCost) || 0;
                 return channels.map(chan => {
                     let fixedFee = chan.fixedFee;
                     if ((chan.id.startsWith('ml') || chan.name.toLowerCase().includes('mercado')) && saleVal >= 79) {
@@ -2461,12 +2496,12 @@
                     let shippingFee = 0;
                     if (chan.hasFreeShippingThreshold) {
                         if (saleVal >= chan.freeShippingThreshold) {
-                            shippingFee = chan.defaultSellerShippingCost;
+                            shippingFee = simShipping > 0 ? simShipping : chan.defaultSellerShippingCost;
                         } else {
                             shippingFee = chan.defaultBelowThresholdShippingCost;
                         }
                     } else {
-                        shippingFee = chan.defaultSellerShippingCost || 0;
+                        shippingFee = simShipping > 0 ? simShipping : (chan.defaultSellerShippingCost || 0);
                     }
 
                     const netProfit = saleVal - commissionFee - shippingFee - calculatedCost;
@@ -2481,7 +2516,7 @@
                         marginPercent
                     };
                 });
-            }, [channels, customSalePrice, calculatedCost]);
+            }, [channels, customSalePrice, customShippingCost, calculatedCost]);
 
             const handleSaveAsProduct = () => {
                 if (!name.trim()) {
@@ -2502,6 +2537,7 @@
                     failRate: type === '3d' ? parseFloat(failRate) || 0 : undefined,
                     filamentId: type === '3d' ? selectedFilamentId : undefined,
                     acquisitionCost: type === 'resale' ? parseFloat(acquisitionCost) || 0 : undefined,
+                    customShippingCost: parseFloat(customShippingCost) || 0
                 };
 
                 onAddProduct(productData);
@@ -2688,12 +2724,21 @@
                                         Margem e Lucro Real Líquido por Canal
                                     </h4>
                                     
-                                    <div className="flex items-center gap-3">
-                                        <span className="text-xs text-gray-400 font-bold whitespace-nowrap uppercase">Simular Preço (R$)</span>
-                                        <input
-                                            type="number" step="0.01" value={customSalePrice} onChange={e => setCustomSalePrice(e.target.value)}
-                                            className="bg-brand-darkBg border border-brand-borderBg text-white rounded-xl px-4 py-2 text-sm font-bold w-28 focus:outline-none focus:border-brand-orange"
-                                        />
+                                    <div className="flex flex-wrap items-center gap-4">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[10px] text-gray-400 font-bold whitespace-nowrap uppercase">Simular Preço:</span>
+                                            <input
+                                                type="number" step="0.01" value={customSalePrice} onChange={e => setCustomSalePrice(e.target.value)}
+                                                className="bg-brand-darkBg border border-brand-borderBg text-white rounded-xl px-3 py-2 text-sm font-bold w-24 focus:outline-none focus:border-brand-orange text-right"
+                                            />
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[10px] text-gray-400 font-bold whitespace-nowrap uppercase">Simular Frete:</span>
+                                            <input
+                                                type="number" step="0.01" value={customShippingCost} onChange={e => setCustomShippingCost(e.target.value)}
+                                                className="bg-brand-darkBg border border-brand-borderBg text-white rounded-xl px-3 py-2 text-sm font-bold w-24 focus:outline-none focus:border-brand-orange text-right"
+                                            />
+                                        </div>
                                     </div>
                                 </div>
 
