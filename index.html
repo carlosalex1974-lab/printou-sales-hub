@@ -1779,12 +1779,13 @@
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="border-b border-brand-borderBg text-xs font-bold text-gray-400 uppercase">
-                                    <th className="pb-3">Data</th>
+                                    <th className="pb-3">Data / Hora</th>
                                     <th className="pb-3">Canal</th>
                                     <th className="pb-3">Produto</th>
                                     <th className="pb-3 text-center">Qtd</th>
                                     <th className="pb-3 text-right">Faturado (Bruto)</th>
                                     <th className="pb-3 text-right">Taxas Canal</th>
+                                    <th className="pb-3 text-right">Frete Cobrado</th>
                                     <th className="pb-3 text-right">Lucro Líquido</th>
                                     <th className="pb-3 text-center">Status</th>
                                     <th className="pb-3 text-right">Ações</th>
@@ -1795,9 +1796,37 @@
                                     const prod = products.find(p => p.id === sale.productId);
                                     const chan = channels.find(c => c.id === sale.channelId);
                                     const fin = compute(sale);
+                                    
+                                    // Formatação amigável de data e hora
+                                    let dateDisplay = sale.date;
+                                    let timeDisplay = '--:--';
+                                    if (sale.date && sale.date.includes('T')) {
+                                        try {
+                                            const dObj = new Date(sale.date);
+                                            const day = String(dObj.getDate()).padStart(2, '0');
+                                            const month = String(dObj.getMonth() + 1).padStart(2, '0');
+                                            const year = dObj.getFullYear();
+                                            const hours = String(dObj.getHours()).padStart(2, '0');
+                                            const minutes = String(dObj.getMinutes()).padStart(2, '0');
+                                            dateDisplay = `${day}/${month}/${year}`;
+                                            timeDisplay = `${hours}:${minutes}`;
+                                        } catch (e) {
+                                            // Fallback
+                                        }
+                                    } else if (sale.date) {
+                                        // Formato antigo YYYY-MM-DD
+                                        const p = sale.date.split('-');
+                                        if (p.length === 3) {
+                                            dateDisplay = `${p[2]}/${p[1]}/${p[0]}`;
+                                        }
+                                    }
+
                                     return (
                                         <tr key={sale.id} className="hover:bg-white/[0.02] transition-colors">
-                                            <td className="py-4 text-xs font-bold text-gray-400">{sale.date}</td>
+                                            <td className="py-4 text-xs font-bold text-gray-400">
+                                                <div>{dateDisplay}</div>
+                                                <div className="text-[10px] text-gray-500 font-normal mt-0.5">{timeDisplay}</div>
+                                            </td>
                                             <td className="py-4 font-semibold" style={{ color: chan?.color }}>
                                                 {chan?.name || 'Excluído'}
                                             </td>
@@ -1805,6 +1834,7 @@
                                             <td className="py-4 text-center font-bold">{sale.quantity}</td>
                                             <td className="py-4 text-right font-bold text-white">R$ {sale.grossValue.toFixed(2)}</td>
                                             <td className="py-4 text-right text-rose-400">R$ {fin.fees.toFixed(2)}</td>
+                                            <td className="py-4 text-right text-amber-400 font-semibold">R$ {(fin.shippingApplied || 0).toFixed(2)}</td>
                                             <td className={`py-4 text-right font-black ${sale.status === 'Cancelado' ? 'text-gray-500 line-through' : 'text-emerald-400'}`}>
                                                 R$ {fin.netProfit.toFixed(2)}
                                             </td>
