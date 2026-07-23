@@ -1786,6 +1786,7 @@
                                     <th className="pb-3 text-right">Faturado (Bruto)</th>
                                     <th className="pb-3 text-right">Taxas Canal</th>
                                     <th className="pb-3 text-right">Frete Cobrado</th>
+                                    <th className="pb-3 text-right">Custo Prod.</th>
                                     <th className="pb-3 text-right">Lucro Líquido</th>
                                     <th className="pb-3 text-center">Status</th>
                                     <th className="pb-3 text-right">Ações</th>
@@ -1835,6 +1836,7 @@
                                             <td className="py-4 text-right font-bold text-white">R$ {sale.grossValue.toFixed(2)}</td>
                                             <td className="py-4 text-right text-rose-400">R$ {fin.fees.toFixed(2)}</td>
                                             <td className="py-4 text-right text-amber-400 font-semibold">R$ {(fin.shippingApplied || 0).toFixed(2)}</td>
+                                            <td className="py-4 text-right text-gray-400">R$ {fin.productCost.toFixed(2)}</td>
                                             <td className={`py-4 text-right font-black ${sale.status === 'Cancelado' ? 'text-gray-500 line-through' : 'text-emerald-400'}`}>
                                                 R$ {fin.netProfit.toFixed(2)}
                                             </td>
