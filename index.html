@@ -282,6 +282,7 @@
             const [activeTab, setActiveTab] = useState('dashboard');
             const [editingProductGlobal, setEditingProductGlobal] = useState(null);
             const [isAddingProductGlobal, setIsAddingProductGlobal] = useState(false);
+            const [stockEntry, setStockEntry] = useState(null);
             const [isSidebarOpen, setIsSidebarOpen] = useState(false);
             const [theme, setTheme] = useState(() => {
                 return localStorage.getItem('printou_theme') || 'light';
@@ -675,7 +676,6 @@
                     companyRealNet: companyRealNet,
                     breakevenTarget: breakevenSalesValue,
                     breakevenProgress: breakevenProgress
-                };
             }, [sales, products, channels, expenses, selectedMonth]);
 
             // --- AUXILIAR: REGISTRAR VENDA E DEDUZIR ESTOQUE ---
@@ -683,7 +683,15 @@
                 setSales(prevSales => [saleToAdd, ...prevSales]);
                 
                 if (saleToAdd.status !== 'Cancelado') {
-                    // Busca o produto correspondente para ver se consome filamento
+                    // 1. Deduz estoque de unidades físicas do produto no catálogo
+                    setProducts(prevProds => prevProds.map(p => {
+                        if (p.id === saleToAdd.productId) {
+                            return { ...p, stock: Math.max(0, (p.stock || 0) - saleToAdd.quantity) };
+                        }
+                        return p;
+                    }));
+
+                    // 2. Deduz filamento se aplicável
                     const prod = products.find(p => p.id === saleToAdd.productId);
                     if (prod && prod.type === '3d' && prod.filamentId) {
                         setFilaments(prevFilaments => prevFilaments.map(fil => {
@@ -989,6 +997,7 @@
                                 products={products} setProducts={setProducts} calculateCost={calculateProductCost} filaments={filaments}
                                 editingProduct={editingProductGlobal} setEditingProduct={setEditingProductGlobal}
                                 isAdding={isAddingProductGlobal} setIsAdding={setIsAddingProductGlobal}
+                                setStockEntry={setStockEntry}
                             />
                         )}
 
@@ -1032,7 +1041,7 @@
                         )}
 
                         {activeTab === 'estoque' && (
-                            <EstoqueView filaments={filaments} setFilaments={setFilaments} suppliers={suppliers} />
+                            <EstoqueView filaments={filaments} setFilaments={setFilaments} suppliers={suppliers} setStockEntry={setStockEntry} />
                         )}
 
                         {activeTab === 'expenses' && (
@@ -1161,6 +1170,118 @@
                                         className="w-full btn-gradient py-4 rounded-xl font-bold text-black uppercase tracking-wide"
                                     >
                                         Confirmar Lançamento
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* --- MODAL DE REGISTRO DE ENTRADA DE ESTOQUE --- */}
+                    {stockEntry && (
+                        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-50 p-4">
+                            <div className="w-full max-w-md glass-panel rounded-2xl p-6 relative border border-emerald-500/30">
+                                <button 
+                                    onClick={() => setStockEntry(null)}
+                                    className="absolute top-4 right-4 text-gray-400 hover:text-white"
+                                >
+                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+
+                                <span className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-400">Logística & Compras</span>
+                                <h3 className="text-xl font-black mb-6 text-white">
+                                    Registrar Entrada de Estoque
+                                </h3>
+
+                                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-gray-300 mb-4">
+                                    Item: <strong className="text-white">{stockEntry.item.name}</strong> ({stockEntry.type === 'product' ? 'Produto' : 'Insumo'})
+                                </div>
+
+                                <form onSubmit={(e) => {
+                                    e.preventDefault();
+                                    const qty = parseFloat(e.target.qty.value);
+                                    const cost = parseFloat(e.target.cost.value) || 0;
+                                    const supplierName = e.target.supplier.value || 'Fornecedor';
+
+                                    if (stockEntry.type === 'product') {
+                                        // Incrementar estoque do produto
+                                        setProducts(prev => prev.map(p => p.id === stockEntry.item.id ? {
+                                            ...p,
+                                            stock: (p.stock || 0) + parseInt(qty)
+                                        } : p));
+
+                                        // Registrar despesa
+                                        const newExpense = {
+                                            id: 'exp' + Date.now().toString().slice(-4),
+                                            name: `Compra de Estoque: ${stockEntry.item.name} (x${qty})`,
+                                            category: 'Matéria-Prima',
+                                            value: cost,
+                                            dueDate: new Date().toISOString().split('T')[0],
+                                            status: 'Pago',
+                                            competency: new Date().toISOString().substring(0, 7)
+                                        };
+                                        setExpenses(prev => [...prev, newExpense]);
+                                    } else {
+                                        // Incrementar peso do filamento
+                                        setFilaments(prev => prev.map(f => f.id === stockEntry.item.id ? {
+                                            ...f,
+                                            currentWeight: (f.currentWeight || 0) + qty
+                                        } : f));
+
+                                        // Registrar despesa
+                                        const newExpense = {
+                                            id: 'exp' + Date.now().toString().slice(-4),
+                                            name: `Compra de Filamento: ${stockEntry.item.name} (${qty}g)`,
+                                            category: 'Matéria-Prima',
+                                            value: cost,
+                                            dueDate: new Date().toISOString().split('T')[0],
+                                            status: 'Pago',
+                                            competency: new Date().toISOString().substring(0, 7)
+                                        };
+                                        setExpenses(prev => [...prev, newExpense]);
+                                    }
+
+                                    setStockEntry(null);
+                                    alert("Entrada de estoque e despesa registrada com sucesso!");
+                                }} className="space-y-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
+                                            {stockEntry.type === 'product' ? 'Quantidade a Adicionar (unidades)' : 'Peso a Adicionar (gramas)'}
+                                        </label>
+                                        <input 
+                                            type="number" required name="qty" min="1" step={stockEntry.type === 'product' ? '1' : '0.1'}
+                                            placeholder={stockEntry.type === 'product' ? 'ex: 10' : 'ex: 1000'}
+                                            className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange text-sm font-bold"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Valor Pago Total (R$)</label>
+                                        <input 
+                                            type="number" required name="cost" step="0.01" min="0" placeholder="0.00"
+                                            className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange text-sm font-bold"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Fornecedor da Compra</label>
+                                        <select 
+                                            name="supplier"
+                                            className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange text-sm"
+                                        >
+                                            <option value="">Nenhum / Direto</option>
+                                            {suppliers.map(s => (
+                                                <option key={s.id} value={s.name}>{s.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <button 
+                                        type="submit"
+                                        className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 py-3.5 rounded-xl font-extrabold text-white uppercase tracking-widest text-xs mt-2"
+                                    >
+                                        Confirmar Entrada & Registrar Despesa
                                     </button>
                                 </form>
                             </div>
@@ -1945,6 +2066,7 @@
                                                                 setEditingProductFromSales({ 
                                                                     ...prod, 
                                                                     price: prod.price !== undefined && prod.price > 0 ? String(prod.price) : fallbackPrice,
+                                                                    stock: prod.stock !== undefined ? String(prod.stock) : '0',
                                                                     customShippingCost: prod.customShippingCost !== undefined ? String(prod.customShippingCost) : '0.00' 
                                                                 });
                                                             }}
@@ -2024,6 +2146,7 @@
                                         ...p,
                                         name: editingProductFromSales.name,
                                         price: parseFloat(editingProductFromSales.price) || 0,
+                                        stock: parseInt(editingProductFromSales.stock) || 0,
                                         customShippingCost: parseFloat(editingProductFromSales.customShippingCost) || 0
                                     } : p));
                                     setEditingProductFromSales(null);
@@ -2044,6 +2167,16 @@
                                             type="number" step="0.01" required
                                             value={editingProductFromSales.price}
                                             onChange={e => setEditingProductFromSales({ ...editingProductFromSales, price: e.target.value })}
+                                            className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange font-bold text-sm"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1.5">Estoque Físico Atual (un)</label>
+                                        <input 
+                                            type="number" required
+                                            value={editingProductFromSales.stock}
+                                            onChange={e => setEditingProductFromSales({ ...editingProductFromSales, stock: e.target.value })}
                                             className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange font-bold text-sm"
                                         />
                                     </div>
@@ -2073,9 +2206,7 @@
         }
 
         // --- ABA 3: CATALOGO DE PRODUTOS & FICHAS TECNICAS (DESIGN CLEAN & PREMIUM) ---
-        function ProductCatalogView({ products, setProducts, calculateCost, filaments = [] }) {
-            const [isAdding, setIsAdding] = useState(false);
-            const [editingProduct, setEditingProduct] = useState(null);
+        function ProductCatalogView({ products, setProducts, calculateCost, filaments = [], editingProduct, setEditingProduct, isAdding, setIsAdding, setStockEntry }) {
             const [newProduct, setNewProduct] = useState({
                 name: '',
                 type: '3d', // '3d' ou 'resale'
@@ -2089,6 +2220,7 @@
                 acquisitionCost: '',
                 customShippingCost: '0.00',
                 price: '0.00',
+                stock: '0',
                 filamentId: filaments[0]?.id || '',
                 image: ''
             });
@@ -2124,6 +2256,7 @@
                     acquisitionCost: newProduct.type === 'resale' ? parseFloat(newProduct.acquisitionCost) : 0,
                     customShippingCost: parseFloat(newProduct.customShippingCost) || 0,
                     price: parseFloat(newProduct.price) || 0,
+                    stock: parseInt(newProduct.stock) || 0,
                     filamentId: newProduct.type === '3d' ? newProduct.filamentId : undefined,
                     image: newProduct.image || ''
                 };
@@ -2143,6 +2276,7 @@
                     acquisitionCost: '',
                     customShippingCost: '0.00',
                     price: '0.00',
+                    stock: '0',
                     filamentId: filaments[0]?.id || '',
                     image: ''
                 });
@@ -2164,6 +2298,7 @@
                     acquisitionCost: editingProduct.type === 'resale' ? parseFloat(editingProduct.acquisitionCost) : 0,
                     customShippingCost: parseFloat(editingProduct.customShippingCost) || 0,
                     price: parseFloat(editingProduct.price) || 0,
+                    stock: parseInt(editingProduct.stock) || 0,
                     filamentId: editingProduct.type === '3d' ? editingProduct.filamentId : undefined,
                     image: editingProduct.image || '',
                     isPendingConfig: false
@@ -2185,6 +2320,7 @@
                     acquisitionCost: prod.acquisitionCost !== undefined ? String(prod.acquisitionCost) : '',
                     customShippingCost: prod.customShippingCost !== undefined ? String(prod.customShippingCost) : '0.00',
                     price: prod.price !== undefined ? String(prod.price) : '0.00',
+                    stock: prod.stock !== undefined ? String(prod.stock) : '0',
                     filamentId: prod.filamentId || filaments[0]?.id || '',
                     image: prod.image || ''
                 });
@@ -2450,6 +2586,19 @@
                                 />
                             </div>
 
+                            <div>
+                                <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2">Estoque Físico Atual (un)</label>
+                                <input 
+                                    type="number" placeholder="0"
+                                    value={activeForm.stock}
+                                    onChange={e => {
+                                        if (isEditing) setEditingProduct({ ...editingProduct, stock: e.target.value });
+                                        else setNewProduct({ ...newProduct, stock: e.target.value });
+                                    }}
+                                    className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange"
+                                />
+                            </div>
+
                             <button 
                                 type="submit"
                                 className="md:col-span-4 btn-gradient py-3.5 rounded-xl font-extrabold text-black uppercase tracking-widest text-xs md:text-sm"
@@ -2513,6 +2662,15 @@
                                             </div>
                                             <div className="flex gap-1">
                                                 <button 
+                                                    onClick={() => setStockEntry({ type: 'product', item: prod })}
+                                                    className="p-1.5 hover:bg-emerald-500/20 text-gray-500 hover:text-emerald-400 rounded-lg transition-all"
+                                                    title="Entrada de Estoque (+)"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                    </svg>
+                                                </button>
+                                                <button 
                                                     onClick={() => handleStartEditProduct(prod)}
                                                     className="p-1.5 hover:bg-white/10 text-gray-500 hover:text-white rounded-lg transition-all"
                                                     title="Editar produto"
@@ -2557,22 +2715,28 @@
                                             </div>
                                         ) : (
                                             /* Métricas Gerais de Custos */
-                                            <div className="grid grid-cols-4 gap-4 border-y border-white/5 py-3">
+                                            <div className="grid grid-cols-5 gap-2 border-y border-white/5 py-3">
                                                 <div>
                                                     <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider block mb-0.5">{isResale ? "Método" : "Material"}</span>
-                                                    <span className="text-sm font-bold text-white">{isResale ? "Compra Direta" : `${prod.weight}g`}</span>
+                                                    <span className="text-sm font-bold text-white">{isResale ? "Compra" : `${prod.weight}g`}</span>
                                                 </div>
                                                 <div>
                                                     <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider block mb-0.5">{isResale ? "Tipo" : "Tempo"}</span>
                                                     <span className="text-sm font-bold text-white">{isResale ? "Pronto" : `${prod.printTime}h`}</span>
                                                 </div>
                                                 <div>
-                                                    <span className="text-[9px] text-brand-orange font-bold uppercase tracking-wider block mb-0.5">Preço Custo</span>
+                                                    <span className="text-[9px] text-brand-orange font-bold uppercase tracking-wider block mb-0.5">Custo</span>
                                                     <span className="text-sm font-extrabold text-brand-orange">R$ {cost.toFixed(2)}</span>
                                                 </div>
                                                 <div>
-                                                    <span className="text-[9px] text-amber-400 font-bold uppercase tracking-wider block mb-0.5">Frete ML/Canal</span>
+                                                    <span className="text-[9px] text-amber-400 font-bold uppercase tracking-wider block mb-0.5">Frete ML</span>
                                                     <span className="text-sm font-bold text-amber-400">R$ {(prod.customShippingCost || 0).toFixed(2)}</span>
+                                                </div>
+                                                <div>
+                                                    <span className="text-[9px] text-emerald-400 font-bold uppercase tracking-wider block mb-0.5">Estoque</span>
+                                                    <span className={`text-sm font-bold block ${prod.stock > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                                        {prod.stock || 0} un
+                                                    </span>
                                                 </div>
                                             </div>
                                         )}
@@ -4678,7 +4842,7 @@
         }
 
         // --- ABA 9: ESTOQUE DE FILAMENTOS (INSUMOS) ---
-        function EstoqueView({ filaments, setFilaments, suppliers }) {
+        function EstoqueView({ filaments, setFilaments, suppliers, setStockEntry }) {
             const [isAdding, setIsAdding] = useState(false);
             const [newFilament, setNewFilament] = useState({
                 name: '',
@@ -4936,6 +5100,17 @@
                                                 className="w-20 bg-[#16161A] border border-white/5 text-white rounded-lg p-1.5 text-center text-xs font-extrabold focus:outline-none focus:border-brand-orange"
                                             />
                                         </div>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => setStockEntry({ type: 'filament', item: fil })}
+                                            className="w-full bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 text-emerald-400 font-bold py-2 rounded-xl text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-1 mt-3"
+                                        >
+                                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            + Entrada (Registrar Compra)
+                                        </button>
                                     </div>
                                 </div>
                             );
