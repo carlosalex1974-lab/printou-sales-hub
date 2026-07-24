@@ -4943,8 +4943,8 @@
             );
         }
 
-        // --- ABA 9: ESTOQUE DE FILAMENTOS (INSUMOS) ---
-        function EstoqueView({ filaments, setFilaments, suppliers, setStockEntry }) {
+        // --- ABA 9: CONTROLE DE ESTOQUE SIMPLES & DIRETO (PRODUTOS) ---
+        function EstoqueView({ products = [], setProducts, calculateCost, suppliers = [], setStockEntry, setStockExit, stockMovements = [], setStockMovements }) {
             const [isAdding, setIsAdding] = useState(false);
             const [newFilament, setNewFilament] = useState({
                 name: '',
