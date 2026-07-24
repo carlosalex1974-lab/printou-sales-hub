@@ -4946,45 +4946,64 @@
         // --- ABA 9: CONTROLE DE ESTOQUE SIMPLES & DIRETO (PRODUTOS) ---
         function EstoqueView({ products = [], setProducts, calculateCost, suppliers = [], setStockEntry, setStockExit, stockMovements = [], setStockMovements }) {
             const [isAdding, setIsAdding] = useState(false);
-            const [newFilament, setNewFilament] = useState({
+            const [search, setSearch] = useState('');
+            const [filterType, setFilterType] = useState('all');
+            const [filterLowStock, setFilterLowStock] = useState(false);
+
+            const [newItem, setNewItem] = useState({
                 name: '',
-                supplierId: suppliers[0]?.id || '',
-                initialWeight: '1000',
-                currentWeight: '1000',
-                alertThreshold: '200',
-                colorHex: '#30D158',
-                material: 'PLA',
-                type: 'filament'
+                sku: '',
+                description: '',
+                type: 'resale', // resale ou 3d
+                stock: '0',
+                alertThreshold: '3',
+                acquisitionCost: '0.00',
+                price: '0.00',
+                supplierId: '',
+                image: ''
             });
 
-            const getUnit = (type) => {
-                if (type === 'resin') return 'ml';
-                if (type === 'unit' || type === 'other' || type === 'product') return 'un';
-                return 'g';
-            };
-
-            const getTypeLabel = (type) => {
-                if (type === 'resin') return 'Resina';
-                if (type === 'unit') return 'Componente';
-                if (type === 'product') return 'Produto Acabado';
-                if (type === 'other') return 'Outro Insumo';
-                return 'Filamento';
-            };
-
-            const handleSave = (e) => {
+            // Adicionar novo item (Produto) diretamente pelo estoque
+            const handleSaveItem = (e) => {
                 e.preventDefault();
-                const fil = {
-                    id: 'fil' + (filaments.length + 1) + Date.now().toString().slice(-2),
-                    name: newFilament.name,
-                    supplierId: newFilament.supplierId,
-                    initialWeight: parseFloat(newFilament.initialWeight) || 1000,
-                    currentWeight: parseFloat(newFilament.currentWeight) || 1000,
-                    alertThreshold: parseFloat(newFilament.alertThreshold) || 200,
-                    colorHex: newFilament.colorHex,
-                    material: newFilament.material,
-                    type: newFilament.type || 'filament'
+                const skuCode = newItem.sku.trim() || 'PRD-' + Date.now().toString().slice(-6);
+                
+                const prod = {
+                    id: skuCode,
+                    name: newItem.name,
+                    description: newItem.description,
+                    type: newItem.type,
+                    weight: newItem.type === '3d' ? 150 : 0, // padrão se for 3d
+                    printTime: newItem.type === '3d' ? 2 : 0,  // padrão se for 3d
+                    filamentCost: newItem.type === '3d' ? parseFloat(newItem.acquisitionCost) : 0,
+                    machineHourCost: newItem.type === '3d' ? 2.00 : 0,
+                    finishingCost: 0,
+                    packagingCost: 0,
+                    failRate: 0,
+                    acquisitionCost: parseFloat(newItem.acquisitionCost) || 0,
+                    price: parseFloat(newItem.price) || 0,
+                    stock: parseInt(newItem.stock) || 0,
+                    customShippingCost: 0,
+                    supplierId: newItem.supplierId,
+                    image: newItem.image || ''
                 };
-                setFilaments([...filaments, fil]);
+
+                setProducts([...products, prod]);
+
+                // Registrar saldo inicial nas movimentações
+                if (prod.stock > 0) {
+                    const movement = {
+                        id: 'mov-' + Date.now() + Math.random().toString(36).substr(2, 4),
+                        timestamp: new Date().toISOString(),
+                        type: 'entrada',
+                        itemName: prod.name,
+                        qty: prod.stock,
+                        unit: 'un',
+                        reason: 'Saldo Inicial de Cadastro'
+                    };
+                    setStockMovements(prev => [movement, ...prev]);
+                }
+
                 setIsAdding(false);
                 setNewItem({
                     name: '',
