@@ -672,7 +672,7 @@
                     }
                 });
 
-                const filteredExpenses = expenses.filter(e => e.competency === selectedMonth);
+                const filteredExpenses = expenses.filter(e => e.competency === selectedMonth && e.category !== 'Matéria-Prima');
                 const totalAdmExpenses = filteredExpenses.reduce((acc, curr) => acc + curr.value, 0);
                 const companyRealNet = totalNet - totalAdmExpenses;
                 const averageMargin = totalGross > 0 ? (totalNet / totalGross) * 100 : 0;
@@ -4334,7 +4334,7 @@
                     }
                 });
 
-                const filteredExpenses = expenses.filter(e => e.competency === selectedMonth);
+                const filteredExpenses = expenses.filter(e => e.competency === selectedMonth && e.category !== 'Matéria-Prima');
                 const totalAdmExpenses = filteredExpenses.reduce((acc, curr) => acc + curr.value, 0);
 
                 const netProfitVendas = totalGross - totalFees - totalCost - totalShipping;
