@@ -1459,39 +1459,35 @@
                     },
                     {
                         id: 'estoque',
-                        title: 'Como gerenciar o estoque de filamentos?',
+                        title: 'Como funciona o Controle de Estoque?',
                         category: 'Estoque',
                         icon: 'package',
                         content: `
                             <div class="space-y-3 text-xs leading-relaxed">
-                                <p>O estoque de filamentos é deduzido automaticamente a cada peça 3D vendida. Veja como gerenciar:</p>
+                                <p>O estoque agora é feito de forma simples e direta por unidade dos produtos cadastrados (seja itens de Revenda ou Impressão 3D):</p>
                                 <ol class="list-decimal pl-4 space-y-1.5 text-gray-300">
-                                    <li>Vá na aba <strong>Estoque</strong> no menu lateral.</li>
-                                    <li>Clique em <strong>"+ Adicionar Nova Bobina"</strong>.</li>
-                                    <li>Defina a cor, marca, peso atual (g) e o <strong>limite de alerta crítico</strong>.</li>
+                                    <li>Acesse a aba <strong>Estoque</strong>.</li>
+                                    <li>Lá você verá a quantidade atual em estoque de cada produto e o limite de alerta de estoque baixo.</li>
+                                    <li><strong>Ajuste Rápido</strong>: Você pode digitar um novo valor no campo de quantidade e salvar diretamente para atualizar o estoque.</li>
+                                    <li><strong>Movimentações</strong>: O sistema registra um log histórico de todas as Entradas e Saídas na tabela inferior para total rastreabilidade.</li>
                                 </ol>
-                                <div class="p-3 bg-amber-500/10 text-amber-400 rounded-xl border border-amber-500/20">
-                                    <strong>⚠️ Alerta de Bobina Crítica:</strong> Quando um filamento atinge o limite definido, o sistema gera avisos automáticos e sinaliza no console de integração para que você não fique sem material!
-                                </div>
                             </div>
                         `
                     },
                     {
                         id: 'produtos',
-                        title: 'Como cadastrar modelos e custos?',
+                        title: 'Como cadastrar produtos e vincular anúncios duplicados?',
                         category: 'Produtos',
                         icon: 'printer',
                         content: `
                             <div class="space-y-3 text-xs leading-relaxed">
-                                <p>Você pode gerenciar o custo real de cada peça no catálogo:</p>
+                                <p>Você gerencia todos os seus produtos no catálogo e pode evitar itens duplicados:</p>
                                 <ol class="list-decimal pl-4 space-y-1.5 text-gray-300">
                                     <li>Acesse a aba <strong>Produtos</strong>.</li>
-                                    <li>Escolha entre cadastrar um item de <strong>Impressão 3D</strong> ou de <strong>Revenda</strong>.</li>
-                                    <li>Para itens 3D, informe o peso da peça (g), tempo de impressão, taxa de perda estimada (%) e vincule a bobina de filamento correspondente.</li>
+                                    <li><strong>Pesquisa Inteligente</strong>: Use a barra de pesquisa no topo para encontrar itens rapidamente por Nome, SKU ou Anúncio Vinculado.</li>
+                                    <li><strong>Evitar Duplicados (Vínculos)</strong>: Clique no botão de link/corrente ao lado de qualquer produto para vinculá-lo a um <strong>Produto Mestre</strong>. O item duplicado sairá da listagem e suas vendas serão unificadas no produto Mestre.</li>
+                                    <li>Todos os anúncios vinculados a um produto Mestre são exibidos no bloco "Vínculos" do cartão do produto.</li>
                                 </ol>
-                                <div class="p-3 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20 font-semibold">
-                                    💡 O sistema calcula o preço de custo real levando em consideração o preço do plástico, custo da hora-máquina, acabamento e embalagem de forma automatizada!
-                                </div>
                             </div>
                         `
                     },
