@@ -1839,6 +1839,7 @@
 
         // --- ABA 1: DASHBOARD VIEW ---
         function DashboardView({ stats, sales, channels, products, compute, filaments = [], selectedMonth }) {
+            const findProduct = (id) => products.find(p => p.id === id || (p.externalIds && p.externalIds.includes(id)));
             // Calcular faturamento por canal
             const channelSales = useMemo(() => {
                 const res = {};
@@ -2083,6 +2084,7 @@
 
         // --- ABA 2: LISTA DE VENDAS E CONTROLE ---
         function SalesListView({ sales, products, channels, setSales, setProducts, compute }) {
+            const findProduct = (id) => products.find(p => p.id === id || (p.externalIds && p.externalIds.includes(id)));
             const [selectedStatusFilter, setSelectedStatusFilter] = useState('Todos');
             const [editingProductFromSales, setEditingProductFromSales] = useState(null);
 
