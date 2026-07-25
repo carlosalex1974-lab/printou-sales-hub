@@ -2358,6 +2358,19 @@
                 image: ''
             });
 
+            const [linkingProduct, setLinkingProduct] = useState(null);
+            const [searchQuery, setSearchQuery] = useState('');
+
+            const filteredProducts = useMemo(() => {
+                if (!searchQuery.trim()) return products;
+                const q = searchQuery.toLowerCase();
+                return products.filter(p => 
+                    p.name.toLowerCase().includes(q) || 
+                    p.id.toLowerCase().includes(q) ||
+                    (p.externalIds && p.externalIds.some(ext => ext.toLowerCase().includes(q)))
+                );
+            }, [products, searchQuery]);
+
              const handleImageUpload = (e, isEdit = false) => {
                  const file = e.target.files[0];
                  if (file) {
@@ -2519,6 +2532,24 @@
                             <i data-lucide={isAdding ? "minus" : "plus"} className="w-4 h-4"></i>
                             {isAdding ? "Fechar Painel" : "Cadastrar Novo Item"}
                         </button>
+                    </div>
+
+                    {/* Barra de Pesquisa */}
+                    <div className="flex gap-3">
+                        <div className="flex-1 relative">
+                            <input 
+                                type="text"
+                                placeholder="Pesquisar por nome, SKU do produto ou anúncio de origem..."
+                                value={searchQuery}
+                                onChange={e => setSearchQuery(e.target.value)}
+                                className="w-full bg-[#121214] border border-white/5 hover:border-white/10 focus:border-brand-orange text-white rounded-xl py-3 px-4 pl-11 text-xs focus:outline-none transition-all"
+                            />
+                            <div className="absolute left-4 top-3.5 text-gray-500">
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                            </div>
+                        </div>
                     </div>
 
                     {isAdding && (
@@ -2773,7 +2804,7 @@
 
                     {/* Catálogo Grid */}
                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                        {products.map(prod => {
+                        {filteredProducts.map(prod => {
                             const cost = calculateCost(prod);
                             const isResale = prod.type === 'resale';
 
@@ -2822,8 +2853,27 @@
                                             <div>
                                                 <h4 className="font-extrabold text-white text-lg tracking-tight line-clamp-1">{prod.name}</h4>
                                                 <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider">Código SKU: {prod.id}</span>
+                                                {prod.externalIds && prod.externalIds.length > 0 && (
+                                                    <div className="mt-1.5 flex flex-wrap gap-1 items-center">
+                                                        <span className="text-[8px] text-amber-400 font-bold uppercase tracking-wider">Vínculos:</span>
+                                                        {prod.externalIds.map(extId => (
+                                                            <span key={extId} className="text-[8px] bg-white/5 text-gray-400 px-1.5 py-0.5 rounded font-mono border border-white/5" title={extId}>
+                                                                {extId}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
                                             <div className="flex gap-1">
+                                                <button 
+                                                    onClick={() => handleStartLinkProduct(prod)}
+                                                    className="p-1.5 hover:bg-amber-500/20 text-gray-500 hover:text-amber-400 rounded-lg transition-all"
+                                                    title="Vincular este anúncio/SKU a outro produto Mestre"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                                                    </svg>
+                                                </button>
                                                 <button 
                                                     onClick={() => setStockEntry({ type: 'product', item: prod })}
                                                     className="p-1.5 hover:bg-emerald-500/20 text-gray-500 hover:text-emerald-400 rounded-lg transition-all"
@@ -2945,6 +2995,82 @@
                             );
                         })}
                     </div>
+
+                    {/* Modal de Vinculação de Produto */}
+                    {linkingProduct && (
+                        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[9999] p-4 animate-fade-in">
+                            <div className="bg-[#121214] border border-white/10 w-full max-w-md rounded-2xl p-6 shadow-2xl relative">
+                                <h3 className="text-lg font-black text-white mb-2 flex items-center gap-2">
+                                    <svg className="w-5 h-5 text-brand-orange" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                                    </svg>
+                                    Vincular Anúncios / Produtos
+                                </h3>
+                                <p className="text-xs text-gray-400 mb-6 leading-relaxed">
+                                    Você está vinculando o anúncio/SKU provisório <strong className="text-white">"{linkingProduct.name}"</strong> a um produto Mestre do seu catálogo. 
+                                    Este item será removido da listagem como duplicado, e todas as vendas dele serão consolidadas automaticamente sob o produto Mestre escolhido.
+                                </p>
+
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-gray-400 mb-2 uppercase tracking-widest">Produto Mestre Principal:</label>
+                                        <select 
+                                            id="master-product-select"
+                                            className="w-full bg-[#16161A] border border-white/10 text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange text-xs font-semibold"
+                                        >
+                                            <option value="">-- Escolha o produto Mestre --</option>
+                                            {products.filter(p => p.id !== linkingProduct.id).map(p => (
+                                                <option key={p.id} value={p.id}>
+                                                    {p.name} (SKU: {p.id})
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="mt-8 flex justify-end gap-3 border-t border-white/5 pt-4">
+                                    <button 
+                                        type="button"
+                                        onClick={() => setLinkingProduct(null)}
+                                        className="px-4 py-2 rounded-xl text-xs font-bold text-gray-400 hover:bg-white/5 transition-all"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button 
+                                        type="button"
+                                        onClick={() => {
+                                            const selectEl = document.getElementById('master-product-select');
+                                            const masterId = selectEl?.value;
+                                            if (!masterId) {
+                                                alert("Por favor, selecione um produto Mestre válido.");
+                                                return;
+                                            }
+                                            
+                                            // Realizar vínculo
+                                            setProducts(prevProds => {
+                                                const updated = prevProds.map(p => {
+                                                    if (p.id === masterId) {
+                                                        const currentExt = p.externalIds || [];
+                                                        const toAdd = [linkingProduct.id, ...(linkingProduct.externalIds || [])];
+                                                        const uniqueExt = Array.from(new Set([...currentExt, ...toAdd]));
+                                                        return { ...p, externalIds: uniqueExt };
+                                                    }
+                                                    return p;
+                                                }).filter(p => p.id !== linkingProduct.id);
+                                                return updated;
+                                            });
+
+                                            setLinkingProduct(null);
+                                            alert("Produtos vinculados com sucesso!");
+                                        }}
+                                        className="px-5 py-2.5 bg-brand-orange hover:bg-orange-600 text-black font-black text-xs rounded-xl uppercase tracking-wider transition-all"
+                                    >
+                                        Confirmar Vínculo
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
         }
