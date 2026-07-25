@@ -5133,6 +5133,8 @@
             const [filterType, setFilterType] = useState('all');
             const [filterLowStock, setFilterLowStock] = useState(false);
 
+            const [editingItem, setEditingItem] = useState(null);
+
             const [newItem, setNewItem] = useState({
                 name: '',
                 sku: '',
@@ -5146,45 +5148,83 @@
                 image: ''
             });
 
-            // Adicionar novo item (Produto) diretamente pelo estoque
+            const handleStartEdit = (prod) => {
+                setEditingItem(prod);
+                setIsAdding(true);
+                setNewItem({
+                    name: prod.name,
+                    sku: prod.id,
+                    description: prod.description || '',
+                    type: prod.type || 'resale',
+                    stock: String(prod.stock || 0),
+                    alertThreshold: String(prod.alertThreshold || 3),
+                    acquisitionCost: String(prod.acquisitionCost || 0),
+                    price: String(prod.price || 0),
+                    supplierId: prod.supplierId || '',
+                    image: prod.image || ''
+                });
+            };
+
+            // Adicionar ou editar item (Produto) diretamente pelo estoque
             const handleSaveItem = (e) => {
                 e.preventDefault();
                 const skuCode = newItem.sku.trim() || 'PRD-' + Date.now().toString().slice(-6);
                 
-                const prod = {
-                    id: skuCode,
-                    name: newItem.name,
-                    description: newItem.description,
-                    type: newItem.type,
-                    weight: newItem.type === '3d' ? 150 : 0, // padrão se for 3d
-                    printTime: newItem.type === '3d' ? 2 : 0,  // padrão se for 3d
-                    filamentCost: newItem.type === '3d' ? parseFloat(newItem.acquisitionCost) : 0,
-                    machineHourCost: newItem.type === '3d' ? 2.00 : 0,
-                    finishingCost: 0,
-                    packagingCost: 0,
-                    failRate: 0,
-                    acquisitionCost: parseFloat(newItem.acquisitionCost) || 0,
-                    price: parseFloat(newItem.price) || 0,
-                    stock: parseInt(newItem.stock) || 0,
-                    customShippingCost: 0,
-                    supplierId: newItem.supplierId,
-                    image: newItem.image || ''
-                };
-
-                setProducts([...products, prod]);
-
-                // Registrar saldo inicial nas movimentações
-                if (prod.stock > 0) {
-                    const movement = {
-                        id: 'mov-' + Date.now() + Math.random().toString(36).substr(2, 4),
-                        timestamp: new Date().toISOString(),
-                        type: 'entrada',
-                        itemName: prod.name,
-                        qty: prod.stock,
-                        unit: 'un',
-                        reason: 'Saldo Inicial de Cadastro'
+                if (editingItem) {
+                    // Editar produto existente
+                    setProducts(prev => prev.map(p => p.id === editingItem.id ? {
+                        ...p,
+                        id: skuCode,
+                        name: newItem.name,
+                        description: newItem.description,
+                        type: newItem.type,
+                        acquisitionCost: parseFloat(newItem.acquisitionCost) || 0,
+                        price: parseFloat(newItem.price) || 0,
+                        stock: parseInt(newItem.stock) || 0,
+                        alertThreshold: parseInt(newItem.alertThreshold) || 3,
+                        supplierId: newItem.supplierId,
+                        image: newItem.image || p.image || ''
+                    } : p));
+                    
+                    setEditingItem(null);
+                    alert("Produto atualizado com sucesso!");
+                } else {
+                    // Cadastrar novo
+                    const prod = {
+                        id: skuCode,
+                        name: newItem.name,
+                        description: newItem.description,
+                        type: newItem.type,
+                        weight: newItem.type === '3d' ? 150 : 0,
+                        printTime: newItem.type === '3d' ? 2 : 0,
+                        filamentCost: newItem.type === '3d' ? parseFloat(newItem.acquisitionCost) : 0,
+                        machineHourCost: newItem.type === '3d' ? 2.00 : 0,
+                        finishingCost: 0,
+                        packagingCost: 0,
+                        failRate: 0,
+                        acquisitionCost: parseFloat(newItem.acquisitionCost) || 0,
+                        price: parseFloat(newItem.price) || 0,
+                        stock: parseInt(newItem.stock) || 0,
+                        customShippingCost: 0,
+                        supplierId: newItem.supplierId,
+                        image: newItem.image || ''
                     };
-                    setStockMovements(prev => [movement, ...prev]);
+
+                    setProducts([...products, prod]);
+
+                    if (prod.stock > 0) {
+                        const movement = {
+                            id: 'mov-' + Date.now() + Math.random().toString(36).substr(2, 4),
+                            timestamp: new Date().toISOString(),
+                            type: 'entrada',
+                            itemName: prod.name,
+                            qty: prod.stock,
+                            unit: 'un',
+                            reason: 'Saldo Inicial de Cadastro'
+                        };
+                        setStockMovements(prev => [movement, ...prev]);
+                    }
+                    alert("Produto cadastrado no estoque com sucesso!");
                 }
 
                 setIsAdding(false);
@@ -5200,7 +5240,6 @@
                     supplierId: '',
                     image: ''
                 });
-                alert("Produto cadastrado no estoque com sucesso!");
             };
 
             // Ajuste manual rápido de estoque via input
@@ -5267,7 +5306,7 @@
                         <div className="glass-panel border border-brand-orange/30 p-6 rounded-2xl animate-fade-in">
                             <h3 className="text-base font-extrabold text-white uppercase tracking-wider mb-6 flex items-center gap-2">
                                 <span className="w-2.5 h-2.5 rounded-full bg-brand-orange"></span>
-                                Cadastrar Novo Item no Estoque
+                                {editingItem ? `✏️ Editar Item do Estoque (SKU: ${editingItem.id})` : "Cadastrar Novo Item no Estoque"}
                             </h3>
                             <form onSubmit={handleSaveItem} className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 <div>
@@ -5354,7 +5393,7 @@
 
                                 <div className="md:col-span-3 flex justify-end gap-3 mt-4">
                                     <button 
-                                        type="button" onClick={() => setIsAdding(false)}
+                                        type="button" onClick={() => { setIsAdding(false); setEditingItem(null); }}
                                         className="bg-transparent border border-white/10 hover:bg-white/5 text-gray-400 hover:text-white px-6 py-3 rounded-xl transition-all text-xs font-bold uppercase tracking-wider"
                                     >
                                         Cancelar
@@ -5363,7 +5402,7 @@
                                         type="submit"
                                         className="bg-brand-orange hover:bg-brand-orange-dark text-black px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all"
                                     >
-                                        Confirmar Cadastro
+                                        {editingItem ? 'Salvar Alterações' : 'Confirmar Cadastro'}
                                     </button>
                                 </div>
                             </form>
@@ -5489,8 +5528,16 @@
                                                     </td>
                                                     <td className="py-4 px-6 text-right space-x-2">
                                                         <button 
+                                                            onClick={() => handleStartEdit(prod)}
+                                                            className="bg-white/5 border border-white/10 hover:bg-white/10 text-white font-extrabold text-[10px] uppercase tracking-wider py-1.5 px-3 rounded-lg transition-all"
+                                                            title="Editar item do estoque"
+                                                        >
+                                                            Editar
+                                                        </button>
+                                                        <button 
                                                             onClick={() => setStockEntry({ type: 'product', item: prod })}
                                                             className="bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 text-emerald-400 font-extrabold text-[10px] uppercase tracking-wider py-1.5 px-3 rounded-lg transition-all"
+                                                            title="Entrada de Estoque (+)"
                                                         >
                                                             + Entrada (Compra)
                                                         </button>
