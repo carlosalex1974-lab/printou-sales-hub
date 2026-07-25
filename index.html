@@ -327,6 +327,11 @@
                 return local ? JSON.parse(local) : INITIAL_FILAMENTS;
             });
 
+            const findProduct = (productId) => {
+                if (!productId) return null;
+                return products.find(p => p.id === productId || (p.externalIds && p.externalIds.includes(productId)));
+            };
+
             const [integrationLogs, setIntegrationLogs] = useState([]);
             const [credentials, setCredentials] = useState({
                 mercadolivre: { clientId: '', clientSecret: '', webhookUrl: 'http://localhost:3001/api/webhooks/mercadolivre', status: 'Sincronizado' },
@@ -507,7 +512,7 @@
             // Lógica de cálculo de frete sugerido automático no lançamento de vendas
             useEffect(() => {
                 const chan = channels.find(c => c.id === newSale.channelId);
-                const prod = products.find(p => p.id === newSale.productId);
+                const prod = findProduct(newSale.productId);
                 
                 if (chan) {
                     const gross = parseFloat(newSale.grossValue) || 0;
@@ -535,7 +540,7 @@
 
             // Auto-preenche o preço bruto da venda com o preço de venda cadastrado no produto
             useEffect(() => {
-                const prod = products.find(p => p.id === newSale.productId);
+                const prod = findProduct(newSale.productId);
                 if (prod) {
                     const fallbackPrice = (calculateProductCost(prod) * (prod.type === 'resale' ? 1.8 : 3));
                     const finalPrice = prod.price > 0 ? prod.price : fallbackPrice;
@@ -597,7 +602,7 @@
 
             // --- LÓGICA DE CÁLCULO FINANCEIRO POR VENDA ---
             const computeSaleFinancials = (sale) => {
-                const prod = products.find(p => p.id === sale.productId);
+                const prod = findProduct(sale.productId);
                 const chan = channels.find(c => c.id === sale.channelId);
                 
                 const productCostTotal = prod ? calculateProductCost(prod) * sale.quantity : 0;
@@ -672,6 +677,12 @@
                 const companyRealNet = totalNet - totalAdmExpenses;
                 const averageMargin = totalGross > 0 ? (totalNet / totalGross) * 100 : 0;
 
+                const totalStockInvestment = products.reduce((acc, prod) => {
+                    const cost = calculateProductCost(prod) || 0;
+                    const stockQty = prod.stock || 0;
+                    return acc + (cost * stockQty);
+                }, 0);
+
                 const profitRate = totalGross > 0 ? totalNet / totalGross : 0;
                 const breakevenSalesValue = profitRate > 0 ? totalAdmExpenses / profitRate : 0;
                 const breakevenProgress = breakevenSalesValue > 0 ? Math.min((totalGross / breakevenSalesValue) * 100, 100) : (totalGross > 0 && totalAdmExpenses === 0 ? 100 : 0);
@@ -686,7 +697,8 @@
                     admExpenses: totalAdmExpenses,
                     companyRealNet: companyRealNet,
                     breakevenTarget: breakevenSalesValue,
-                    breakevenProgress: breakevenProgress
+                    breakevenProgress: breakevenProgress,
+                    stockInvestment: totalStockInvestment
                 };
             }, [sales, products, channels, expenses, selectedMonth]);
 
@@ -697,14 +709,14 @@
                 if (saleToAdd.status !== 'Cancelado') {
                     // 1. Deduz estoque de unidades físicas do produto no catálogo
                     setProducts(prevProds => prevProds.map(p => {
-                        if (p.id === saleToAdd.productId) {
+                        if (p.id === saleToAdd.productId || (p.externalIds && p.externalIds.includes(saleToAdd.productId))) {
                             return { ...p, stock: Math.max(0, (p.stock || 0) - saleToAdd.quantity) };
                         }
                         return p;
                     }));
 
                     // 2. Deduz filamento se aplicável
-                    const prod = products.find(p => p.id === saleToAdd.productId);
+                    const prod = findProduct(saleToAdd.productId);
                     if (prod && prod.type === '3d' && prod.filamentId) {
                         setFilaments(prevFilaments => prevFilaments.map(fil => {
                             if (fil.id === prod.filamentId) {
@@ -1412,7 +1424,7 @@
             }
 
             function calculateEstimatedCost() {
-                const prod = products.find(p => p.id === newSale.productId);
+                const prod = findProduct(newSale.productId);
                 if (!prod) return 0;
                 return calculateProductCost(prod) * (parseInt(newSale.quantity) || 1);
             }
@@ -1848,7 +1860,7 @@
             return (
                 <div className="space-y-8">
                     {/* Grid de KPIs Financeiros */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
                         <div className="glass-card rounded-2xl p-5 flex flex-col justify-between">
                             <div className="flex justify-between items-start">
                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Faturamento Bruto</span>
@@ -1868,6 +1880,17 @@
                             <div className="mt-4">
                                 <h3 className="text-xl font-black text-emerald-400">R$ {stats.net.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h3>
                                 <span className="text-[9px] text-gray-400">Líquido de vendas</span>
+                            </div>
+                        </div>
+
+                        <div className="glass-card rounded-2xl p-5 flex flex-col justify-between">
+                            <div className="flex justify-between items-start">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Estoque Investido</span>
+                                <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-400"><i data-lucide="package" className="w-4 h-4"></i></div>
+                            </div>
+                            <div className="mt-4">
+                                <h3 className="text-xl font-black text-white">R$ {(stats.stockInvestment || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h3>
+                                <span className="text-[9px] text-gray-400">Total em produtos</span>
                             </div>
                         </div>
 
@@ -2031,7 +2054,7 @@
 
                             <div className="space-y-4 max-h-[350px] overflow-y-auto pr-2">
                                 {sales.slice(0, 5).map(sale => {
-                                    const prod = products.find(p => p.id === sale.productId);
+                                    const prod = findProduct(sale.productId);
                                     const chan = channels.find(c => c.id === sale.channelId);
                                     const fin = compute(sale);
                                     return (
@@ -2127,7 +2150,7 @@
                             </thead>
                             <tbody className="divide-y divide-brand-borderBg text-sm">
                                 {filteredSales.map(sale => {
-                                    const prod = products.find(p => p.id === sale.productId);
+                                    const prod = findProduct(sale.productId);
                                     const chan = channels.find(c => c.id === sale.channelId);
                                     const fin = compute(sale);
                                     
@@ -4208,7 +4231,7 @@
             const handleExportCSV = () => {
                 let csv = "Data,Canal,Produto,Quantidade,Valor Bruto,Comissao,Frete,Lucro Liquido\n";
                 sales.forEach(sale => {
-                    const prod = products.find(p => p.id === sale.productId);
+                    const prod = findProduct(sale.productId);
                     const chan = channels.find(c => c.id === sale.channelId);
                     const fin = compute(sale);
                     csv += `${sale.date},"${chan?.name || 'Excluido'}","${prod?.name || 'Excluido'}",${sale.quantity},${sale.grossValue},${fin.fees.toFixed(2)},${sale.shipping},${fin.netProfit}\n`;
