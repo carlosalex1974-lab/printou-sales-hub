@@ -612,21 +612,27 @@
                     fee = (sale.grossValue * (chan.commission / 100)) + fixedFee;
                 }
                 
-                // Se o frete registrado for 0, usa a regra configurada do canal/produto como fallback
-                let shipping = parseFloat(sale.shipping) || 0;
-                if (shipping === 0 && chan) {
-                    const productShipping = (prod && prod.customShippingCost !== undefined && prod.customShippingCost > 0)
-                        ? prod.customShippingCost
-                        : (chan.defaultSellerShippingCost || 0);
+                // Prioridade 1: Frete customizado configurado no produto (aba Produtos)
+                let shipping = (prod && prod.customShippingCost !== undefined && prod.customShippingCost > 0)
+                    ? parseFloat(prod.customShippingCost)
+                    : 0;
 
+                // Prioridade 2: Se não houver frete no produto, usa o frete vindo do canal/integração
+                if (shipping === 0) {
+                    shipping = parseFloat(sale.shipping) || 0;
+                }
+
+                // Prioridade 3: Fallback para regras gerais do canal
+                if (shipping === 0 && chan) {
+                    const defaultCost = chan.defaultSellerShippingCost || 0;
                     if (chan.hasFreeShippingThreshold) {
                         if (sale.grossValue >= chan.freeShippingThreshold) {
-                            shipping = productShipping;
+                            shipping = defaultCost;
                         } else {
                             shipping = chan.defaultBelowThresholdShippingCost || 0;
                         }
                     } else {
-                        shipping = productShipping || 0;
+                        shipping = defaultCost;
                     }
                 }
                 
