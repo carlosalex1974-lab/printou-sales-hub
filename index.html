@@ -1850,6 +1850,22 @@
         // --- ABA 1: DASHBOARD VIEW ---
         function DashboardView({ stats, sales, channels, products, compute, filaments = [], selectedMonth }) {
             const findProduct = (id) => products.find(p => p.id === id || (p.externalIds && p.externalIds.includes(id)));
+
+            // 5 Produtos mais vendidos no mês selecionado
+            const topProducts = useMemo(() => {
+                const map = {};
+                const filteredSales = sales.filter(s => s.date.startsWith(selectedMonth));
+                filteredSales.forEach(sale => {
+                    if (sale.status !== 'Cancelado') {
+                        map[sale.productId] = (map[sale.productId] || 0) + sale.quantity;
+                    }
+                });
+                return Object.entries(map).map(([id, qty]) => {
+                    const prod = findProduct(id);
+                    return { name: prod?.name || 'Excluído', qty };
+                }).sort((a, b) => b.qty - a.qty).slice(0, 5);
+            }, [sales, products, selectedMonth]);
+
             // Calcular faturamento por canal
             const channelSales = useMemo(() => {
                 const res = {};
@@ -2056,35 +2072,58 @@
                             </div>
                         </div>
 
-                        {/* Fila de Recentes */}
-                        <div className="glass-panel rounded-2xl p-6">
-                            <h3 className="font-bold text-lg mb-6 flex items-center gap-2">
-                                <i data-lucide="clock" className="text-brand-orange w-5 h-5"></i>
-                                Últimas Transações
-                            </h3>
+                        {/* Fila de Recentes e Mais Vendidos */}
+                        <div className="space-y-6">
+                            {/* Últimas Transações */}
+                            <div className="glass-panel rounded-2xl p-6">
+                                <h3 className="font-bold text-lg mb-6 flex items-center gap-2">
+                                    <i data-lucide="clock" className="text-brand-orange w-5 h-5"></i>
+                                    Últimas Transações
+                                </h3>
 
-                            <div className="space-y-4 max-h-[350px] overflow-y-auto pr-2">
-                                {sales.slice(0, 5).map(sale => {
-                                    const prod = findProduct(sale.productId);
-                                    const chan = channels.find(c => c.id === sale.channelId);
-                                    const fin = compute(sale);
-                                    return (
-                                        <div key={sale.id} className="flex justify-between items-center p-3 rounded-xl bg-white/5 border border-white/5">
-                                            <div>
-                                                <h4 className="text-xs font-bold text-white truncate max-w-[150px]">{prod?.name || 'Produto Excluído'}</h4>
-                                                <span className="text-[10px] px-2 py-0.5 rounded bg-white/10 font-bold" style={{ color: chan?.color }}>
-                                                    {chan?.name.split(' ')[0]}
-                                                </span>
+                                <div className="space-y-4 max-h-[350px] overflow-y-auto pr-2">
+                                    {sales.slice(0, 5).map(sale => {
+                                        const prod = findProduct(sale.productId);
+                                        const chan = channels.find(c => c.id === sale.channelId);
+                                        const fin = compute(sale);
+                                        return (
+                                            <div key={sale.id} className="flex justify-between items-center p-3 rounded-xl bg-white/5 border border-white/5">
+                                                <div>
+                                                    <h4 className="text-xs font-bold text-white truncate max-w-[150px]">{prod?.name || 'Produto Excluído'}</h4>
+                                                    <span className="text-[10px] px-2 py-0.5 rounded bg-white/10 font-bold" style={{ color: chan?.color }}>
+                                                        {chan?.name.split(' ')[0]}
+                                                    </span>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-xs font-bold text-white">R$ {sale.grossValue.toFixed(2)}</p>
+                                                    <span className={`text-[10px] font-bold ${sale.status === 'Cancelado' ? 'text-rose-400' : 'text-emerald-400'}`}>
+                                                        {sale.status === 'Cancelado' ? 'Cancelado' : `+ R$ ${fin.netProfit.toFixed(2)}`}
+                                                    </span>
+                                                </div>
                                             </div>
-                                            <div className="text-right">
-                                                <p className="text-xs font-bold text-white">R$ {sale.grossValue.toFixed(2)}</p>
-                                                <span className={`text-[10px] font-bold ${sale.status === 'Cancelado' ? 'text-rose-400' : 'text-emerald-400'}`}>
-                                                    {sale.status === 'Cancelado' ? 'Cancelado' : `+ R$ ${fin.netProfit.toFixed(2)}`}
-                                                </span>
-                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* Top 5 Produtos Mais Vendidos */}
+                            <div className="glass-panel rounded-2xl p-6">
+                                <h3 className="font-bold text-lg mb-6 flex items-center gap-2">
+                                    🏆 Top 5 Mais Vendidos ({selectedMonth})
+                                </h3>
+                                <div className="space-y-4">
+                                    {topProducts.length === 0 ? (
+                                        <p className="text-gray-500 text-sm">Nenhuma venda registrada neste mês.</p>
+                                    ) : topProducts.map((p, idx) => (
+                                        <div key={idx} className="flex justify-between items-center p-3 rounded-xl bg-white/5 border border-white/5">
+                                            <span className="font-bold text-gray-300 truncate max-w-[170px]" title={p.name}>
+                                                <span className="text-brand-orange mr-2 font-black">#{idx+1}</span>
+                                                {p.name}
+                                            </span>
+                                            <span className="text-xs font-black text-white bg-white/5 px-2.5 py-1 rounded-lg">{p.qty} un</span>
                                         </div>
-                                    );
-                                })}
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     </div>
