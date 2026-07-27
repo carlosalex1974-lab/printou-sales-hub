@@ -37,6 +37,7 @@ const DEFAULT_DB = {
     products: [],
     filaments: [],
     sales: [],
+    monthlyClosings: [],
     integrationLogs: [],
     credentials: {
         mercadolivre: { clientId: '', clientSecret: '', webhookUrl: 'http://localhost:3001/api/webhooks/mercadolivre', status: 'Não Sincronizado' },
@@ -114,6 +115,8 @@ function readDb() {
         db.credentials.facebook.status = 'Não Sincronizado';
     }
 
+    db.monthlyClosings = db.monthlyClosings || [];
+
     return db;
 }
 
@@ -121,6 +124,57 @@ function readDb() {
 function saveDb(data) {
     fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 4), 'utf-8');
 }
+
+// Endpoint para listar fechamentos mensais
+app.get('/api/monthly-closings', (req, res) => {
+    try {
+        const db = readDb();
+        res.json(db.monthlyClosings || []);
+    } catch (error) {
+        console.error("Erro ao ler fechamentos mensais:", error);
+        res.status(500).json({ error: "Erro ao ler fechamentos" });
+    }
+});
+
+// Endpoint para realizar fechamento mensal
+app.post('/api/monthly-closings', (req, res) => {
+    try {
+        const { month, grossRevenue, netProfit, totalExpenses, realNet, salesCount, stockMovementsCount, stockSnapshot } = req.body;
+        
+        if (!month) {
+            return res.status(400).json({ error: "Mês é obrigatório" });
+        }
+
+        const db = readDb();
+        db.monthlyClosings = db.monthlyClosings || [];
+
+        // Evitar duplicidade de fechamento para o mesmo mês
+        if (db.monthlyClosings.some(c => c.month === month)) {
+            return res.status(400).json({ error: `O mês ${month} já está fechado.` });
+        }
+
+        const closing = {
+            id: 'close-' + Date.now(),
+            month,
+            closedAt: new Date().toISOString(),
+            grossRevenue: parseFloat(grossRevenue) || 0,
+            netProfit: parseFloat(netProfit) || 0,
+            totalExpenses: parseFloat(totalExpenses) || 0,
+            realNet: parseFloat(realNet) || 0,
+            salesCount: parseInt(salesCount) || 0,
+            stockMovementsCount: parseInt(stockMovementsCount) || 0,
+            stockSnapshot: stockSnapshot || []
+        };
+
+        db.monthlyClosings.push(closing);
+        saveDb(db);
+
+        res.json({ success: true, closing });
+    } catch (error) {
+        console.error("Erro ao registrar fechamento mensal:", error);
+        res.status(500).json({ error: "Erro ao registrar fechamento" });
+    }
+});
 
 // Endpoint para ler dados
 app.get('/api/data', (req, res) => {
@@ -163,6 +217,69 @@ app.post('/api/data', (req, res) => {
         const mergedFilaments = (newData.filaments && newData.filaments.length > 0) ? newData.filaments : currentData.filaments;
         const mergedSuppliers = (newData.suppliers && newData.suppliers.length > 0) ? newData.suppliers : currentData.suppliers;
         const mergedExpenses = (newData.expenses && newData.expenses.length > 0) ? newData.expenses : currentData.expenses;
+
+        // Validar bloqueio de fechamento mensal
+        const closedMonths = (currentData.monthlyClosings || []).map(c => c.month);
+        
+        if (closedMonths.length > 0) {
+            // Validar vendas
+            if (newData.sales) {
+                // 1. Verificar se alguma venda de mês fechado foi deletada
+                const currentClosedSales = currentData.sales.filter(s => closedMonths.includes(s.date.substring(0, 7)));
+                for (const sale of currentClosedSales) {
+                    const exists = mergedSales.find(s => s.id === sale.id);
+                    if (!exists) {
+                        return res.status(400).json({ error: `Operação inválida: A venda #${sale.id} pertence a um mês já fechado (${sale.date.substring(0, 7)}) e não pode ser excluída.` });
+                    }
+                }
+                // 2. Verificar se alguma venda de mês fechado foi alterada ou criada retroativamente
+                for (const sale of mergedSales) {
+                    const saleMonth = sale.date.substring(0, 7);
+                    if (closedMonths.includes(saleMonth)) {
+                        const original = currentData.sales.find(s => s.id === sale.id);
+                        if (!original) {
+                            return res.status(400).json({ error: `Operação inválida: Não é permitido criar vendas retroativas para o mês fechado ${saleMonth}.` });
+                        }
+                        // Verificar se houve alteração nos campos críticos
+                        if (original.grossValue !== sale.grossValue || 
+                            original.quantity !== sale.quantity || 
+                            original.productId !== sale.productId || 
+                            original.shipping !== sale.shipping ||
+                            original.status !== sale.status) {
+                            return res.status(400).json({ error: `Operação inválida: A venda #${sale.id} pertence a um mês fechado (${saleMonth}) e não pode ser modificada.` });
+                        }
+                    }
+                }
+            }
+
+            // Validar despesas
+            if (newData.expenses) {
+                // 1. Verificar se alguma despesa de mês fechado foi deletada
+                const currentClosedExpenses = currentData.expenses.filter(e => closedMonths.includes(e.competency));
+                for (const exp of currentClosedExpenses) {
+                    const exists = mergedExpenses.find(e => e.id === exp.id);
+                    if (!exists) {
+                        return res.status(400).json({ error: `Operação inválida: A despesa #${exp.id} pertence a um mês já fechado (${exp.competency}) e não pode ser excluída.` });
+                    }
+                }
+                // 2. Verificar se alguma despesa de mês fechado foi alterada ou criada retroativamente
+                for (const exp of mergedExpenses) {
+                    const expMonth = exp.competency;
+                    if (closedMonths.includes(expMonth)) {
+                        const original = currentData.expenses.find(e => e.id === exp.id);
+                        if (!original) {
+                            return res.status(400).json({ error: `Operação inválida: Não é permitido criar despesas retroativas para o mês fechado ${expMonth}.` });
+                        }
+                        // Verificar se houve alteração crítica
+                        if (original.value !== exp.value || 
+                            original.status !== exp.status || 
+                            original.name !== exp.name) {
+                            return res.status(400).json({ error: `Operação inválida: A despesa #${exp.id} pertence a um mês fechado (${expMonth}) e não pode ser modificada.` });
+                        }
+                    }
+                }
+            }
+        }
 
         const mergedData = {
             ...currentData,
