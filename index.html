@@ -258,7 +258,7 @@
             window.location.href = window.location.pathname;
         }
 
-        const { useState, useEffect, useMemo } = React;
+        const { useState, useEffect, useMemo, useRef } = React;
 
         // --- DADOS INICIAIS DO LOCALSTORAGE (MOCK) ---
         const INITIAL_CHANNELS = [
@@ -344,6 +344,7 @@
                 shopee: { shopId: '', apiKey: '', webhookUrl: 'http://localhost:3001/api/webhooks/shopee', status: 'Sincronizado' }
             });
             const [isLoaded, setIsLoaded] = useState(false);
+            const hasLoadedFromServer = useRef(false);
 
             // Estados da Assistente Kika
             const [isKikaOpen, setIsKikaOpen] = useState(false);
@@ -432,6 +433,7 @@
                                 body: JSON.stringify(updatedPayload)
                             });
                         }
+                        hasLoadedFromServer.current = true;
                     }
                 } catch (error) {
                     console.warn("Servidor de banco de dados offline. Usando fallback LocalStorage:", error);
@@ -563,7 +565,7 @@
 
             // Sincronização geral com LocalStorage e Banco de Dados Local (com debounce de 100ms)
             useEffect(() => {
-                if (!isLoaded) return;
+                if (!isLoaded || !hasLoadedFromServer.current) return;
 
                 try {
                     localStorage.setItem('printou_channels', JSON.stringify(channels));
