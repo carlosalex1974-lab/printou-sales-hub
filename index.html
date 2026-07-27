@@ -2241,22 +2241,27 @@
                                     const fin = compute(sale);
                                     
                                     // Formatação amigável de data e hora
-                                    // Formatação amigável de data e hora
                                     let dateDisplay = sale.date || '';
                                     let timeDisplay = '--:--';
                                     if (sale.date) {
                                         try {
                                             const hasTime = sale.date.includes('T') || sale.date.includes(' ') || sale.date.includes(':');
-                                            const dObj = new Date(sale.date);
-                                            if (!isNaN(dObj.getTime())) {
-                                                const day = String(dObj.getDate()).padStart(2, '0');
-                                                const month = String(dObj.getMonth() + 1).padStart(2, '0');
-                                                const year = dObj.getFullYear();
-                                                dateDisplay = `${day}/${month}/${year}`;
-                                                if (hasTime) {
+                                            if (hasTime) {
+                                                const dObj = new Date(sale.date);
+                                                if (!isNaN(dObj.getTime())) {
+                                                    const day = String(dObj.getDate()).padStart(2, '0');
+                                                    const month = String(dObj.getMonth() + 1).padStart(2, '0');
+                                                    const year = dObj.getFullYear();
+                                                    dateDisplay = `${day}/${month}/${year}`;
                                                     const hours = String(dObj.getHours()).padStart(2, '0');
                                                     const minutes = String(dObj.getMinutes()).padStart(2, '0');
                                                     timeDisplay = `${hours}:${minutes}`;
+                                                }
+                                            } else {
+                                                // Evita bug de fuso horário local que subtrai horas e muda para o dia anterior
+                                                const p = sale.date.split('-');
+                                                if (p.length === 3) {
+                                                    dateDisplay = `${p[2]}/${p[1]}/${p[0]}`;
                                                 }
                                             }
                                         } catch (e) {
