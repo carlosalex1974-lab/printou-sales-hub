@@ -120,9 +120,31 @@ function readDb() {
     return db;
 }
 
-// Helper para salvar DB
+// Helper para salvar DB com escrita atômica e backups automáticos rotativos
 function saveDb(data) {
-    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 4), 'utf-8');
+    try {
+        if (fs.existsSync(DB_FILE)) {
+            // 1. Backup imediato (.bak)
+            fs.copyFileSync(DB_FILE, DB_FILE + '.bak');
+
+            // 2. Rotação automática dos últimos 5 estados salvos
+            for (let i = 4; i >= 1; i--) {
+                const currentBackup = path.join(DB_DIR, `db_backup_${i}.json`);
+                const nextBackup = path.join(DB_DIR, `db_backup_${i + 1}.json`);
+                if (fs.existsSync(currentBackup)) {
+                    fs.copyFileSync(currentBackup, nextBackup);
+                }
+            }
+            fs.copyFileSync(DB_FILE, path.join(DB_DIR, 'db_backup_1.json'));
+        }
+    } catch (e) {
+        console.error("Erro ao gerar backups do banco de dados:", e);
+    }
+
+    // 3. Escrita atômica segura (evita arquivos em branco se o servidor cair no meio da gravação)
+    const tempFile = DB_FILE + '.tmp';
+    fs.writeFileSync(tempFile, JSON.stringify(data, null, 4), 'utf-8');
+    fs.renameSync(tempFile, DB_FILE);
 }
 
 // Endpoint para listar fechamentos mensais
