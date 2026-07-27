@@ -2241,26 +2241,32 @@
                                     const fin = compute(sale);
                                     
                                     // Formatação amigável de data e hora
-                                    let dateDisplay = sale.date;
+                                    // Formatação amigável de data e hora
+                                    let dateDisplay = sale.date || '';
                                     let timeDisplay = '--:--';
-                                    if (sale.date && sale.date.includes('T')) {
+                                    if (sale.date) {
                                         try {
+                                            const hasTime = sale.date.includes('T') || sale.date.includes(' ') || sale.date.includes(':');
                                             const dObj = new Date(sale.date);
-                                            const day = String(dObj.getDate()).padStart(2, '0');
-                                            const month = String(dObj.getMonth() + 1).padStart(2, '0');
-                                            const year = dObj.getFullYear();
-                                            const hours = String(dObj.getHours()).padStart(2, '0');
-                                            const minutes = String(dObj.getMinutes()).padStart(2, '0');
-                                            dateDisplay = `${day}/${month}/${year}`;
-                                            timeDisplay = `${hours}:${minutes}`;
+                                            if (!isNaN(dObj.getTime())) {
+                                                const day = String(dObj.getDate()).padStart(2, '0');
+                                                const month = String(dObj.getMonth() + 1).padStart(2, '0');
+                                                const year = dObj.getFullYear();
+                                                dateDisplay = `${day}/${month}/${year}`;
+                                                if (hasTime) {
+                                                    const hours = String(dObj.getHours()).padStart(2, '0');
+                                                    const minutes = String(dObj.getMinutes()).padStart(2, '0');
+                                                    timeDisplay = `${hours}:${minutes}`;
+                                                }
+                                            }
                                         } catch (e) {
                                             // Fallback
-                                        }
-                                    } else if (sale.date) {
-                                        // Formato antigo YYYY-MM-DD
-                                        const p = sale.date.split('-');
-                                        if (p.length === 3) {
-                                            dateDisplay = `${p[2]}/${p[1]}/${p[0]}`;
+                                            if (sale.date.includes('-')) {
+                                                const p = sale.date.split('T')[0].split('-');
+                                                if (p.length === 3) {
+                                                    dateDisplay = `${p[2]}/${p[1]}/${p[0]}`;
+                                                }
+                                            }
                                         }
                                     }
 
