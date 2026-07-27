@@ -441,7 +441,11 @@
 
             useEffect(() => {
                 if (currentUser) {
-                    localStorage.setItem('printou_user', JSON.stringify(currentUser));
+                    try {
+                        localStorage.setItem('printou_user', JSON.stringify(currentUser));
+                    } catch (e) {
+                        console.warn("Falha ao salvar usuário no LocalStorage", e);
+                    }
                 } else {
                     localStorage.removeItem('printou_user');
                 }
@@ -555,12 +559,16 @@
             useEffect(() => {
                 if (!isLoaded) return;
 
-                localStorage.setItem('printou_channels', JSON.stringify(channels));
-                localStorage.setItem('printou_products', JSON.stringify(products));
-                localStorage.setItem('printou_sales', JSON.stringify(sales));
-                localStorage.setItem('printou_suppliers', JSON.stringify(suppliers));
-                localStorage.setItem('printou_expenses', JSON.stringify(expenses));
-                localStorage.setItem('printou_filaments', JSON.stringify(filaments));
+                try {
+                    localStorage.setItem('printou_channels', JSON.stringify(channels));
+                    localStorage.setItem('printou_products', JSON.stringify(products));
+                    localStorage.setItem('printou_sales', JSON.stringify(sales));
+                    localStorage.setItem('printou_suppliers', JSON.stringify(suppliers));
+                    localStorage.setItem('printou_expenses', JSON.stringify(expenses));
+                    localStorage.setItem('printou_filaments', JSON.stringify(filaments));
+                } catch (e) {
+                    console.warn("Aviso: Limite de armazenamento LocalStorage do navegador excedido. Os dados continuarão sendo salvos com segurança no servidor local/nuvem.", e);
+                }
 
                 const sync = async () => {
                     try {
@@ -4321,12 +4329,16 @@
                                                 const imported = JSON.parse(event.target.result);
                                                 if (imported.sales && imported.products) {
                                                     if (confirm("ATENÇÃO: Importar este arquivo substituirá os dados atuais do sistema. Tem certeza que deseja prosseguir?")) {
-                                                        if (imported.sales) localStorage.setItem('printou_sales', JSON.stringify(imported.sales));
-                                                        if (imported.products) localStorage.setItem('printou_products', JSON.stringify(imported.products));
-                                                        if (imported.channels) localStorage.setItem('printou_channels', JSON.stringify(imported.channels));
-                                                        if (imported.suppliers) localStorage.setItem('printou_suppliers', JSON.stringify(imported.suppliers));
-                                                        if (imported.expenses) localStorage.setItem('printou_expenses', JSON.stringify(imported.expenses));
-                                                        if (imported.filaments) localStorage.setItem('printou_filaments', JSON.stringify(imported.filaments));
+                                                        try {
+                                                            if (imported.sales) localStorage.setItem('printou_sales', JSON.stringify(imported.sales));
+                                                            if (imported.products) localStorage.setItem('printou_products', JSON.stringify(imported.products));
+                                                            if (imported.channels) localStorage.setItem('printou_channels', JSON.stringify(imported.channels));
+                                                            if (imported.suppliers) localStorage.setItem('printou_suppliers', JSON.stringify(imported.suppliers));
+                                                            if (imported.expenses) localStorage.setItem('printou_expenses', JSON.stringify(imported.expenses));
+                                                            if (imported.filaments) localStorage.setItem('printou_filaments', JSON.stringify(imported.filaments));
+                                                        } catch (errLocal) {
+                                                            console.warn("Aviso: Limite de armazenamento LocalStorage excedido ao restaurar backup. Os dados serão carregados do servidor.", errLocal);
+                                                        }
                                                         
                                                         await fetch('/api/data', {
                                                             method: 'POST',
