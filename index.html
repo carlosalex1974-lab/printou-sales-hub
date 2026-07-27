@@ -252,6 +252,12 @@
             document.body.appendChild(errDiv);
         });
 
+        // Utilitário para limpar cache local via URL (?clear)
+        if (window.location.search.includes('clear')) {
+            localStorage.clear();
+            window.location.href = window.location.pathname;
+        }
+
         const { useState, useEffect, useMemo } = React;
 
         // --- DADOS INICIAIS DO LOCALSTORAGE (MOCK) ---
@@ -567,7 +573,10 @@
                     localStorage.setItem('printou_expenses', JSON.stringify(expenses));
                     localStorage.setItem('printou_filaments', JSON.stringify(filaments));
                 } catch (e) {
-                    console.warn("Aviso: Limite de armazenamento LocalStorage do navegador excedido. Os dados continuarão sendo salvos com segurança no servidor local/nuvem.", e);
+                    console.warn("Aviso: Limite de armazenamento LocalStorage excedido. Limpando cache de produtos local para liberar espaço...", e);
+                    try {
+                        localStorage.removeItem('printou_products');
+                    } catch (err) {}
                 }
 
                 const sync = async () => {
