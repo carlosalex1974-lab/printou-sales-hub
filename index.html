@@ -2155,6 +2155,49 @@
             const findProduct = (id) => products.find(p => p.id === id || (p.externalIds && p.externalIds.includes(id)));
             const [selectedStatusFilter, setSelectedStatusFilter] = useState('Todos');
             const [editingProductFromSales, setEditingProductFromSales] = useState(null);
+            const [editingSale, setEditingSale] = useState(null);
+
+            const formatForInput = (dateStr) => {
+                if (!dateStr) return '';
+                if (dateStr.length <= 10) {
+                    return `${dateStr}T12:00`;
+                }
+                try {
+                    const d = new Date(dateStr);
+                    if (isNaN(d.getTime())) return '';
+                    const tzoffset = d.getTimezoneOffset() * 60000;
+                    const localISOTime = (new Date(d.getTime() - tzoffset)).toISOString().slice(0, -1);
+                    return localISOTime.substring(0, 16);
+                } catch (e) {
+                    return '';
+                }
+            };
+
+            const handleUpdateSale = (e) => {
+                e.preventDefault();
+                const newMonth = editingSale.date.substring(0, 7);
+                if (monthlyClosings.some(c => c.month === newMonth)) {
+                    alert(`Não é permitido alterar a venda para o mês fechado ${newMonth}.`);
+                    return;
+                }
+                
+                setSales(sales.map(s => {
+                    if (s.id === editingSale.id) {
+                        return {
+                            ...s,
+                            date: editingSale.date,
+                            channelId: editingSale.channelId,
+                            productId: editingSale.productId,
+                            quantity: parseInt(editingSale.quantity) || 1,
+                            grossValue: parseFloat(editingSale.grossValue) || 0,
+                            shipping: parseFloat(editingSale.shipping) || 0,
+                            status: editingSale.status
+                        };
+                    }
+                    return s;
+                }));
+                setEditingSale(null);
+            };
 
             const isClosed = (dateStr) => {
                 if (!dateStr) return false;
@@ -2201,6 +2244,113 @@
 
             return (
                 <div className="glass-panel rounded-2xl p-6 overflow-hidden">
+                    {editingSale && (
+                        <div className="glass-panel rounded-2xl p-6 border border-brand-orange/30 bg-brand-orange/5 mb-6 animate-fade-in">
+                            <div className="flex justify-between items-center mb-4">
+                                <h4 className="font-extrabold text-white text-md flex items-center gap-2">
+                                    <i data-lucide="edit-3" className="text-brand-orange w-5 h-5"></i>
+                                    Editar Registro de Venda (#{editingSale.id})
+                                </h4>
+                                <button 
+                                    onClick={() => setEditingSale(null)}
+                                    className="p-1 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white"
+                                >
+                                    <i data-lucide="x" className="w-5 h-5"></i>
+                                </button>
+                            </div>
+                            
+                            <form onSubmit={handleUpdateSale} className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Data / Hora</label>
+                                    <input 
+                                        type="datetime-local" required
+                                        value={editingSale.date}
+                                        onChange={e => setEditingSale(prev => ({ ...prev, date: e.target.value }))}
+                                        className="w-full bg-brand-darkBg border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Canal de Venda</label>
+                                    <select
+                                        value={editingSale.channelId}
+                                        onChange={e => setEditingSale(prev => ({ ...prev, channelId: e.target.value }))}
+                                        className="w-full bg-brand-darkBg border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange"
+                                    >
+                                        {channels.map(c => (
+                                            <option key={c.id} value={c.id}>{c.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Produto</label>
+                                    <select
+                                        value={editingSale.productId}
+                                        onChange={e => setEditingSale(prev => ({ ...prev, productId: e.target.value }))}
+                                        className="w-full bg-brand-darkBg border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange"
+                                    >
+                                        {products.map(p => (
+                                            <option key={p.id} value={p.id}>{p.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Quantidade</label>
+                                    <input 
+                                        type="number" min="1" required
+                                        value={editingSale.quantity}
+                                        onChange={e => setEditingSale(prev => ({ ...prev, quantity: e.target.value }))}
+                                        className="w-full bg-brand-darkBg border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Valor Bruto (R$)</label>
+                                    <input 
+                                        type="number" step="0.01" required
+                                        value={editingSale.grossValue}
+                                        onChange={e => setEditingSale(prev => ({ ...prev, grossValue: e.target.value }))}
+                                        className="w-full bg-brand-darkBg border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Frete Cobrado (R$)</label>
+                                    <input 
+                                        type="number" step="0.01" required
+                                        value={editingSale.shipping}
+                                        onChange={e => setEditingSale(prev => ({ ...prev, shipping: e.target.value }))}
+                                        className="w-full bg-brand-darkBg border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Status</label>
+                                    <select
+                                        value={editingSale.status}
+                                        onChange={e => setEditingSale(prev => ({ ...prev, status: e.target.value }))}
+                                        className="w-full bg-brand-darkBg border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange"
+                                    >
+                                        {['Pago', 'Enviado', 'Entregue', 'Cancelado'].map(st => (
+                                            <option key={st} value={st}>{st}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="flex items-end gap-2">
+                                    <button 
+                                        type="submit"
+                                        className="flex-1 bg-brand-orange hover:bg-brand-orange/80 text-white font-bold py-3 rounded-xl text-xs uppercase tracking-wider transition-all"
+                                    >
+                                        Salvar
+                                    </button>
+                                    <button 
+                                        type="button"
+                                        onClick={() => setEditingSale(null)}
+                                        className="bg-white/5 border border-white/10 hover:bg-white/10 text-gray-400 font-bold py-3 px-4 rounded-xl text-xs uppercase tracking-wider transition-all"
+                                    >
+                                        Cancelar
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    )}
+
                     <div className="flex justify-between items-center mb-6">
                         <h3 className="font-black text-xl text-gradient">Registro Geral de Vendas</h3>
                         
@@ -2333,6 +2483,19 @@
                                                     </span>
                                                 ) : (
                                                     <>
+                                                        <button 
+                                                            onClick={() => {
+                                                                setEditingSale({
+                                                                    ...sale,
+                                                                    date: formatForInput(sale.date)
+                                                                });
+                                                                window.scrollTo({ top: 0, behavior: 'smooth' });
+                                                            }}
+                                                            className="p-1.5 hover:bg-brand-orange/20 rounded-lg text-gray-400 hover:text-brand-orange"
+                                                            title="Editar Venda"
+                                                        >
+                                                            <i data-lucide="edit-3" className="w-4 h-4"></i>
+                                                        </button>
                                                         <button 
                                                             onClick={() => toggleCancel(sale.id)}
                                                             className="p-1.5 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white"
