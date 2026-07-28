@@ -424,6 +424,7 @@ app.post('/api/webhooks/:provider', async (req, res) => {
         let shipping;
         let buyer;
         let isRealMLOrder = false;
+        let saleDate = new Date().toISOString();
 
         // Trata webhook oficial do Mercado Livre
         if (provider === 'mercadolivre' && payload.resource && payload.topic === 'orders') {
@@ -459,6 +460,7 @@ app.post('/api/webhooks/:provider', async (req, res) => {
             }
             
             const orderData = await orderRes.json();
+            saleDate = orderData.date_closed || orderData.date_created || saleDate;
             orderId = String(orderData.id);
             buyer = `${orderData.buyer.first_name || ''} ${orderData.buyer.last_name || ''}`.trim() || orderData.buyer.nickname || 'Comprador ML';
             grossValue = orderData.total_amount;
@@ -535,6 +537,7 @@ app.post('/api/webhooks/:provider', async (req, res) => {
             } else {
                 buyer = payload.buyer || 'Cliente Shopify';
             }
+            saleDate = payload.created_at || saleDate;
         } else {
             // Lógica de simulação antiga/Shopee
             orderId = payload.order_id || payload.order_sn || `int_${Date.now().toString().slice(-4)}`;
@@ -545,6 +548,7 @@ app.post('/api/webhooks/:provider', async (req, res) => {
             grossValue = parseFloat(payload.grossValue) || 49.90;
             shipping = parseFloat(payload.shipping) || 0.0;
             buyer = payload.buyer || 'Cliente Integrado';
+            saleDate = payload.date || saleDate;
         }
         
         // Evita duplicar venda
@@ -609,7 +613,7 @@ app.post('/api/webhooks/:provider', async (req, res) => {
         // Registrar a venda no caixa
         const newSale = {
             id: orderId,
-            date: todayStr,
+            date: saleDate,
             channelId,
             productId: product.id,
             quantity,
