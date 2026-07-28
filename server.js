@@ -554,6 +554,12 @@ app.post('/api/webhooks/:provider', async (req, res) => {
         // Evita duplicar venda
         const saleExists = db.sales.find(s => s.id === orderId);
         if (saleExists) {
+            // Atualiza a data com hora se a venda antiga só tinha o dia YYYY-MM-DD
+            if (saleExists.date && saleExists.date.length <= 10 && saleDate && saleDate.length > 10) {
+                saleExists.date = saleDate;
+                saveDb(db);
+                return res.json({ success: true, message: `Pedido #${orderId} atualizado com data e hora detalhadas.` });
+            }
             return res.json({ success: true, message: `Pedido #${orderId} já processado anteriormente.` });
         }
 
