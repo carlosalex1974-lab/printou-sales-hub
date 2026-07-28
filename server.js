@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import fs from 'fs';
+import { MongoClient } from 'mongodb';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -14,6 +15,17 @@ const DB_FILE = path.join(DB_DIR, 'db.json');
 
 // Trava em memória para evitar concorrência/duplicação de webhooks
 const activeLocks = new Set();
+
+const uri = "mongodb+srv://carlosalex1974_db_user:kPMDLXtyBwR4NUtd@printouhub.zn8nyjr.mongodb.net/?retryWrites=true&w=majority&appName=PrintouHub";
+const client = new MongoClient(uri);
+let sysCol;
+async function connectDB() {
+    await client.connect();
+    sysCol = client.db("printou").collection("system");
+    console.log("Conectado ao MongoDB Atlas!");
+}
+connectDB().catch(console.error);
+
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
@@ -51,27 +63,19 @@ const DEFAULT_DB = {
     ]
 };
 
-// Garantir que a pasta 'data' existe
-if (!fs.existsSync(DB_DIR)) {
-    fs.mkdirSync(DB_DIR);
-}
 
-// Inicializar banco se vazio
-if (!fs.existsSync(DB_FILE)) {
-    fs.writeFileSync(DB_FILE, JSON.stringify(DEFAULT_DB, null, 4), 'utf-8');
-}
 
 // Helper para ler DB
-function readDb() {
+async function readDb() {
     let db;
     try {
-        const fileData = fs.readFileSync(DB_FILE, 'utf-8');
-        db = JSON.parse(fileData);
+        const doc = await sysCol.findOne({_id: 'main'});
+        db = doc || JSON.parse(JSON.stringify(DEFAULT_DB));
     } catch (e) {
+        console.error("Erro no MongoDB:", e);
         db = JSON.parse(JSON.stringify(DEFAULT_DB));
     }
-
-    // Injeta variáveis de ambiente se disponíveis
+    
     db.credentials = db.credentials || {};
     
     db.credentials.mercadolivre = db.credentials.mercadolivre || {};
@@ -96,61 +100,31 @@ function readDb() {
     db.credentials.facebook.businessId = process.env.FB_BUSINESS_ID || db.credentials.facebook.businessId || '1550133536629313';
     db.credentials.facebook.catalogId = process.env.FB_CATALOG_ID || db.credentials.facebook.catalogId || '';
 
-    // Define status como Sincronizado se houver credenciais
-    if (db.credentials.mercadolivre.clientId && db.credentials.mercadolivre.clientSecret) {
-        db.credentials.mercadolivre.status = 'Sincronizado';
-    }
-    if (db.credentials.mercadolivre2.clientId && db.credentials.mercadolivre2.clientSecret) {
-        db.credentials.mercadolivre2.status = 'Sincronizado';
-    }
-    if (db.credentials.shopee.shopId && db.credentials.shopee.apiKey) {
-        db.credentials.shopee.status = 'Sincronizado';
-    }
-    if (db.credentials.site.apiKey && db.credentials.site.apiSecret) {
-        db.credentials.site.status = 'Sincronizado';
-    }
-    if (db.credentials.facebook.accessToken) {
-        db.credentials.facebook.status = 'Sincronizado';
-    } else {
-        db.credentials.facebook.status = 'Não Sincronizado';
-    }
+    if (db.credentials.mercadolivre.clientId && db.credentials.mercadolivre.clientSecret) db.credentials.mercadolivre.status = 'Sincronizado';
+    if (db.credentials.mercadolivre2.clientId && db.credentials.mercadolivre2.clientSecret) db.credentials.mercadolivre2.status = 'Sincronizado';
+    if (db.credentials.shopee.shopId && db.credentials.shopee.apiKey) db.credentials.shopee.status = 'Sincronizado';
+    if (db.credentials.site.apiKey && db.credentials.site.apiSecret) db.credentials.site.status = 'Sincronizado';
+    if (db.credentials.facebook.accessToken) db.credentials.facebook.status = 'Sincronizado';
+    else db.credentials.facebook.status = 'Nao Sincronizado';
 
     db.monthlyClosings = db.monthlyClosings || [];
-
     return db;
 }
 
 // Helper para salvar DB com escrita atômica e backups automáticos rotativos
-function saveDb(data) {
+async function saveDb(data) {
     try {
-        if (fs.existsSync(DB_FILE)) {
-            // 1. Backup imediato (.bak)
-            fs.copyFileSync(DB_FILE, DB_FILE + '.bak');
-
-            // 2. Rotação automática dos últimos 5 estados salvos
-            for (let i = 4; i >= 1; i--) {
-                const currentBackup = path.join(DB_DIR, `db_backup_${i}.json`);
-                const nextBackup = path.join(DB_DIR, `db_backup_${i + 1}.json`);
-                if (fs.existsSync(currentBackup)) {
-                    fs.copyFileSync(currentBackup, nextBackup);
-                }
-            }
-            fs.copyFileSync(DB_FILE, path.join(DB_DIR, 'db_backup_1.json'));
-        }
-    } catch (e) {
-        console.error("Erro ao gerar backups do banco de dados:", e);
+        const { _id, ...updateData } = data;
+        await sysCol.updateOne({_id: 'main'}, {$set: updateData}, {upsert: true});
+    } catch(e) {
+        console.error("Erro ao salvar no MongoDB:", e);
     }
-
-    // 3. Escrita atômica segura (evita arquivos em branco se o servidor cair no meio da gravação)
-    const tempFile = DB_FILE + '.tmp';
-    fs.writeFileSync(tempFile, JSON.stringify(data, null, 4), 'utf-8');
-    fs.renameSync(tempFile, DB_FILE);
 }
 
 // Endpoint para listar fechamentos mensais
-app.get('/api/monthly-closings', (req, res) => {
+app.get('/api/monthly-closings', async (req, res) => {
     try {
-        const db = readDb();
+        const db = await readDb();
         res.json(db.monthlyClosings || []);
     } catch (error) {
         console.error("Erro ao ler fechamentos mensais:", error);
@@ -159,7 +133,7 @@ app.get('/api/monthly-closings', (req, res) => {
 });
 
 // Endpoint para realizar fechamento mensal
-app.post('/api/monthly-closings', (req, res) => {
+app.post('/api/monthly-closings', async (req, res) => {
     try {
         const { month, grossRevenue, netProfit, totalExpenses, realNet, salesCount, stockMovementsCount, stockSnapshot } = req.body;
         
@@ -167,7 +141,7 @@ app.post('/api/monthly-closings', (req, res) => {
             return res.status(400).json({ error: "Mês é obrigatório" });
         }
 
-        const db = readDb();
+        const db = await readDb();
         db.monthlyClosings = db.monthlyClosings || [];
 
         // Evitar duplicidade de fechamento para o mesmo mês
@@ -189,7 +163,7 @@ app.post('/api/monthly-closings', (req, res) => {
         };
 
         db.monthlyClosings.push(closing);
-        saveDb(db);
+        await saveDb(db);
 
         res.json({ success: true, closing });
     } catch (error) {
@@ -199,9 +173,9 @@ app.post('/api/monthly-closings', (req, res) => {
 });
 
 // Endpoint para ler dados
-app.get('/api/data', (req, res) => {
+app.get('/api/data', async (req, res) => {
     try {
-        const data = readDb();
+        const data = await readDb();
         res.json(data);
     } catch (error) {
         console.error("Erro ao ler banco de dados local:", error);
@@ -210,10 +184,10 @@ app.get('/api/data', (req, res) => {
 });
 
 // Endpoint para salvar dados
-app.post('/api/data', (req, res) => {
+app.post('/api/data', async (req, res) => {
     try {
         const newData = req.body;
-        const currentData = readDb();
+        const currentData = await readDb();
         
         // Mesclar chaves individuais de credenciais para preservar tokens de acesso confidenciais
         const mergedCredentials = { ...currentData.credentials };
@@ -316,7 +290,7 @@ app.post('/api/data', (req, res) => {
             integrationLogs: newData.integrationLogs || currentData.integrationLogs
         };
         
-        saveDb(mergedData);
+        await saveDb(mergedData);
         res.json({ success: true, message: "Dados persistidos no banco de dados local com sucesso!" });
     } catch (error) {
         console.error("Erro ao salvar banco de dados local:", error);
@@ -360,13 +334,13 @@ async function getValidAccessToken(accountKey, db) {
             creds.refreshToken = tokenData.refresh_token;
             creds.tokenExpiresAt = Date.now() + (tokenData.expires_in * 1000);
             creds.status = 'Autorizado';
-            saveDb(db);
+            await saveDb(db);
             return creds.accessToken;
         } else {
             const errText = await response.text();
             console.error(`[ML] Erro ao atualizar token da conta ${accountKey}:`, errText);
             creds.status = 'Erro de Autenticação';
-            saveDb(db);
+            await saveDb(db);
             return null;
         }
     } catch (error) {
@@ -412,7 +386,7 @@ app.post('/api/webhooks/:provider', async (req, res) => {
     }
 
     try {
-        const db = readDb();
+        const db = await readDb();
         const todayStr = new Date().toISOString().split('T')[0];
         
         let orderId;
@@ -557,7 +531,7 @@ app.post('/api/webhooks/:provider', async (req, res) => {
             // Atualiza a data com hora se a venda antiga só tinha o dia YYYY-MM-DD
             if (saleExists.date && saleExists.date.length <= 10 && saleDate && saleDate.length > 10) {
                 saleExists.date = saleDate;
-                saveDb(db);
+                await saveDb(db);
                 return res.json({ success: true, message: `Pedido #${orderId} atualizado com data e hora detalhadas.` });
             }
             return res.json({ success: true, message: `Pedido #${orderId} já processado anteriormente.` });
@@ -652,7 +626,7 @@ app.post('/api/webhooks/:provider', async (req, res) => {
             db.integrationLogs = db.integrationLogs.slice(-50);
         }
         
-        saveDb(db);
+        await saveDb(db);
         
         res.json({
             success: true,
@@ -674,11 +648,11 @@ app.post('/api/webhooks/:provider', async (req, res) => {
 });
 
 // Endpoint para limpar os logs de integração
-app.post('/api/integration/logs/clear', (req, res) => {
+app.post('/api/integration/logs/clear', async (req, res) => {
     try {
-        const db = readDb();
+        const db = await readDb();
         db.integrationLogs = [];
-        saveDb(db);
+        await saveDb(db);
         res.json({ success: true, message: "Logs limpos com sucesso!" });
     } catch (e) {
         res.status(500).json({ error: "Erro ao limpar logs" });
@@ -690,9 +664,9 @@ app.post('/api/integration/logs/clear', (req, res) => {
 // =====================================================
 
 // Obter configurações do Facebook
-app.get('/api/facebook/config', (req, res) => {
+app.get('/api/facebook/config', async (req, res) => {
     try {
-        const db = readDb();
+        const db = await readDb();
         res.json(db.credentials.facebook || {});
     } catch (e) {
         res.status(500).json({ error: "Erro ao ler configurações do Facebook" });
@@ -700,15 +674,15 @@ app.get('/api/facebook/config', (req, res) => {
 });
 
 // Salvar configurações do Facebook
-app.post('/api/facebook/config', (req, res) => {
+app.post('/api/facebook/config', async (req, res) => {
     try {
-        const db = readDb();
+        const db = await readDb();
         db.credentials.facebook = {
             ...db.credentials.facebook,
             ...req.body,
             status: req.body.accessToken ? 'Sincronizado' : 'Não Sincronizado'
         };
-        saveDb(db);
+        await saveDb(db);
         res.json({ success: true, message: "Configurações salvas com sucesso!", config: db.credentials.facebook });
     } catch (e) {
         res.status(500).json({ error: "Erro ao salvar configurações do Facebook" });
@@ -716,9 +690,9 @@ app.post('/api/facebook/config', (req, res) => {
 });
 
 // Listar produtos do Shopify sincronizados
-app.get('/api/facebook/products', (req, res) => {
+app.get('/api/facebook/products', async (req, res) => {
     try {
-        const db = readDb();
+        const db = await readDb();
         res.json(db.shopifyProducts || []);
     } catch (e) {
         res.status(500).json({ error: "Erro ao listar produtos do Shopify" });
@@ -728,7 +702,7 @@ app.get('/api/facebook/products', (req, res) => {
 // Sincronizar produtos da loja Shopify
 app.post('/api/facebook/sync-shopify', async (req, res) => {
     try {
-        const db = readDb();
+        const db = await readDb();
         const siteCreds = db.credentials.site;
         
         if (!siteCreds || !siteCreds.apiSecret) {
@@ -808,7 +782,7 @@ app.post('/api/facebook/sync-shopify', async (req, res) => {
             message: `🛒 [SHOPIFY] Catálogo sincronizado: ${newCount} novos produtos importados, ${updatedCount} atualizados.`
         });
 
-        saveDb(db);
+        await saveDb(db);
         res.json({ success: true, message: "Sincronização concluída!", imported: newCount, updated: updatedCount });
     } catch (err) {
         console.error("[SHOPIFY-SYNC] Falha ao sincronizar:", err);
@@ -817,14 +791,14 @@ app.post('/api/facebook/sync-shopify', async (req, res) => {
 });
 
 // Salvar produtos sincronizados diretamente pelo navegador (Fallback Sem Chaves)
-app.post('/api/facebook/save-shopify-products', (req, res) => {
+app.post('/api/facebook/save-shopify-products', async (req, res) => {
     try {
         const { products } = req.body;
         if (!products || !Array.isArray(products)) {
             return res.status(400).json({ error: "Lista de produtos inválida." });
         }
 
-        const db = readDb();
+        const db = await readDb();
         db.shopifyProducts = db.shopifyProducts || [];
 
         let newCount = 0;
@@ -874,7 +848,7 @@ app.post('/api/facebook/save-shopify-products', (req, res) => {
             message: `🛒 [SHOPIFY-NAVEGADOR] Sincronização direta concluída: ${newCount} novos produtos importados, ${updatedCount} atualizados.`
         });
 
-        saveDb(db);
+        await saveDb(db);
         res.json({ success: true, message: "Sincronização via navegador salva com sucesso!", imported: newCount, updated: updatedCount });
     } catch (e) {
         console.error("[FB-SYNC-BROWSER] Erro ao salvar produtos do site:", e);
@@ -883,10 +857,10 @@ app.post('/api/facebook/save-shopify-products', (req, res) => {
 });
 
 // Excluir um produto do catálogo local
-app.delete('/api/facebook/products/:id', (req, res) => {
+app.delete('/api/facebook/products/:id', async (req, res) => {
     const { id } = req.params;
     try {
-        const db = readDb();
+        const db = await readDb();
         const initialLength = (db.shopifyProducts || []).length;
         db.shopifyProducts = (db.shopifyProducts || []).filter(p => p.id !== id);
         
@@ -894,7 +868,7 @@ app.delete('/api/facebook/products/:id', (req, res) => {
             return res.status(404).json({ error: "Produto não encontrado." });
         }
         
-        saveDb(db);
+        await saveDb(db);
         res.json({ success: true, message: "Produto removido com sucesso!" });
     } catch (e) {
         console.error("[FB-DELETE-PRODUCT] Erro ao deletar:", e);
@@ -903,9 +877,9 @@ app.delete('/api/facebook/products/:id', (req, res) => {
 });
 
 // Endpoint do Feed de Catálogo do Facebook (CSV para Sincronização sem Token)
-app.get('/api/facebook/catalog.csv', (req, res) => {
+app.get('/api/facebook/catalog.csv', async (req, res) => {
     try {
-        const db = readDb();
+        const db = await readDb();
         const products = db.shopifyProducts || [];
         
         let csv = 'id,title,description,availability,condition,price,link,image_link,brand\n';
@@ -940,7 +914,7 @@ app.get('/api/facebook/catalog.csv', (req, res) => {
 app.post('/api/facebook/publish', async (req, res) => {
     const { productId } = req.body;
     try {
-        const db = readDb();
+        const db = await readDb();
         const fbCreds = db.credentials.facebook;
         const prod = (db.shopifyProducts || []).find(p => p.id === productId);
 
@@ -996,7 +970,7 @@ app.post('/api/facebook/publish', async (req, res) => {
                     message: `📢 [FACEBOOK] Anúncio publicado no Marketplace para o item "${prod.title}".`
                 });
                 
-                saveDb(db);
+                await saveDb(db);
                 return res.json({ success: true, message: "Produto publicado no Facebook com sucesso!", published: true });
             } else {
                 const errText = await response.text();
@@ -1037,7 +1011,7 @@ app.post('/api/facebook/publish', async (req, res) => {
                 replyText: ''
             });
 
-            saveDb(db);
+            await saveDb(db);
             return res.json({ 
                 success: true, 
                 message: "Produto publicado com sucesso! (Modo Simulado ativado. Nova pergunta recebida no chat!)", 
@@ -1052,9 +1026,9 @@ app.post('/api/facebook/publish', async (req, res) => {
 });
 
 // Listar mensagens recebidas no Facebook Marketplace
-app.get('/api/facebook/messages', (req, res) => {
+app.get('/api/facebook/messages', async (req, res) => {
     try {
-        const db = readDb();
+        const db = await readDb();
         res.json(db.facebookMessages || []);
     } catch (e) {
         res.status(500).json({ error: "Erro ao buscar mensagens do Facebook" });
@@ -1062,10 +1036,10 @@ app.get('/api/facebook/messages', (req, res) => {
 });
 
 // Responder mensagem no chat do Facebook Marketplace (Auto ou Manual)
-app.post('/api/facebook/messages/reply', (req, res) => {
+app.post('/api/facebook/messages/reply', async (req, res) => {
     const { messageId, replyText } = req.body;
     try {
-        const db = readDb();
+        const db = await readDb();
         db.facebookMessages = db.facebookMessages || [];
         const msg = db.facebookMessages.find(m => m.id === messageId);
 
@@ -1085,7 +1059,7 @@ app.post('/api/facebook/messages/reply', (req, res) => {
             message: `💬 [MESSENGER] Resposta enviada para ${msg.buyerName}: "${replyText.substring(0, 40)}..."`
         });
 
-        saveDb(db);
+        await saveDb(db);
         res.json({ success: true, message: "Resposta enviada com sucesso!", messageObj: msg });
     } catch (e) {
         res.status(500).json({ error: "Erro ao enviar resposta" });
@@ -1093,16 +1067,16 @@ app.post('/api/facebook/messages/reply', (req, res) => {
 });
 
 // Endpoint para zerar todos os dados do banco (preservando credenciais e canais)
-app.post('/api/data/reset', (req, res) => {
+app.post('/api/data/reset', async (req, res) => {
     try {
-        const db = readDb();
+        const db = await readDb();
         db.sales = [];
         db.expenses = [];
         db.products = [];
         db.filaments = [];
         db.suppliers = [];
         db.integrationLogs = [];
-        saveDb(db);
+        await saveDb(db);
         res.json({ success: true, message: "Sistema resetado com sucesso! Pronto para uso real." });
     } catch (e) {
         console.error(e);
@@ -1118,7 +1092,7 @@ app.get('/api/auth/mercadolivre/callback', async (req, res) => {
     }
     
     try {
-        const db = readDb();
+        const db = await readDb();
         const accountKey = state === 'ml2' ? 'mercadolivre2' : 'mercadolivre';
         const creds = db.credentials[accountKey];
         
@@ -1163,7 +1137,7 @@ app.get('/api/auth/mercadolivre/callback', async (req, res) => {
         creds.tokenExpiresAt = Date.now() + (tokenData.expires_in * 1000);
         creds.status = 'Autorizado';
         
-        saveDb(db);
+        await saveDb(db);
         
         // Redireciona de volta para o painel do aplicativo
         res.send(`
@@ -1188,10 +1162,10 @@ app.get('/api/auth/mercadolivre/callback', async (req, res) => {
 });
 
 // Endpoint para Autenticação (Login)
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
     const { email, password } = req.body;
     try {
-        const db = readDb();
+        const db = await readDb();
         const usersList = db.users || DEFAULT_DB.users;
         const user = usersList.find(u => u.email === email && u.password === password);
         
@@ -1223,7 +1197,7 @@ async function pollMercadoLivreOrders() {
 
     for (const accountKey of accountKeys) {
         try {
-            const db = readDb();
+            const db = await readDb();
             const creds = db.credentials[accountKey];
             if (!creds || !creds.accessToken || !creds.refreshToken || !creds.userId) {
                 continue; // conta não configurada, pular
@@ -1255,7 +1229,7 @@ async function pollMercadoLivreOrders() {
             }
 
             // Recarrega DB fresco para cada verificação
-            const freshDb = readDb();
+            const freshDb = await readDb();
             const existingIds = new Set(freshDb.sales.map(s => s.id));
             let newCount = 0;
 
@@ -1387,7 +1361,7 @@ async function pollMercadoLivreOrders() {
                 if (freshDb.integrationLogs.length > 50) {
                     freshDb.integrationLogs = freshDb.integrationLogs.slice(-50);
                 }
-                saveDb(freshDb);
+                await saveDb(freshDb);
                 console.log(`[AUTO-SYNC] ✅ ${newCount} nova(s) venda(s) importada(s) da conta ${accountKey}.`);
             }
         } catch (err) {
@@ -1399,7 +1373,7 @@ async function pollMercadoLivreOrders() {
 // Atualiza status de vendas canceladas no ML
 async function pollCancelledOrders() {
     try {
-        const db = readDb();
+        const db = await readDb();
         const creds = db.credentials.mercadolivre;
         if (!creds || !creds.accessToken || !creds.userId) return;
 
@@ -1418,7 +1392,7 @@ async function pollCancelledOrders() {
         const data = await response.json();
         if (!data.results) return;
 
-        const freshDb = readDb();
+        const freshDb = await readDb();
         let updated = false;
 
         for (const order of data.results) {
@@ -1430,7 +1404,7 @@ async function pollCancelledOrders() {
             }
         }
 
-        if (updated) saveDb(freshDb);
+        if (updated) await saveDb(freshDb);
     } catch (err) {
         console.error('[AUTO-SYNC] Erro ao verificar cancelamentos:', err.message);
     }
