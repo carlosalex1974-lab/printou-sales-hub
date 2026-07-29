@@ -1472,6 +1472,25 @@
             function renderKikaAssistant() {
                 const guides = [
                     {
+                        id: 'news_mongodb',
+                        title: 'NOVIDADES: Banco de Dados e Fim de Conflitos',
+                        category: 'Atualizações',
+                        icon: 'bolt',
+                        content: `
+                            <div class="space-y-3 text-xs leading-relaxed">
+                                <p>A plataforma passou por duas grandes cirurgias de infraestrutura recentemente:</p>
+                                <div class="p-3 bg-white/5 rounded-xl border border-white/5 space-y-1">
+                                    <p class="font-bold text-brand-orange">1. Cofre Blindado (MongoDB)</p>
+                                    <p class="text-[11px] text-gray-400">Seus dados (vendas, estoque, produtos) agora estão armazenados em um banco profissional em nuvem (MongoDB). Eles estão 100% seguros contra perdas ou reinicializações do servidor. Adeus perdas de arquivos!</p>
+                                </div>
+                                <div class="p-3 bg-white/5 rounded-xl border border-white/5 space-y-1">
+                                    <p class="font-bold text-brand-yellow">2. Arquitetura Granular (Fim do Lost Update)</p>
+                                    <p class="text-[11px] text-gray-400">Antes, se você deixasse a aba aberta, ela podia esmagar o trabalho do robô do Mercado Livre. Agora o motor foi refeito: seu navegador atualiza e envia apenas o número específico que você editou pela internet, garantindo velocidade e impedindo conflitos!</p>
+                                </div>
+                            </div>
+                        `
+                    },
+                    {
                         id: 'sales',
                         title: 'Como lançar vendas e monitorar pedidos?',
                         category: 'Vendas',
