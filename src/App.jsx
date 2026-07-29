@@ -358,7 +358,7 @@ function App() {
         e.preventDefault();
         const saleToAdd = {
             id: 's' + (sales.length + 1) + Date.now().toString().slice(-3),
-            date: new Date().toISOString().split('T')[0],
+            date: new Date().toISOString(),
             channelId: newSale.channelId,
             productId: newSale.productId,
             quantity: parseInt(newSale.quantity),
@@ -407,7 +407,7 @@ function App() {
         // 2. Registra a venda e deduz estoque
         const saleToAdd = {
             id: 's_auto_' + Date.now().toString().slice(-4),
-            date: new Date().toISOString().split('T')[0],
+            date: new Date().toISOString(),
             channelId: saleData.channelId,
             productId: saleData.productId,
             quantity: saleData.quantity,

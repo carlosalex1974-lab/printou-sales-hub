@@ -61,7 +61,7 @@ export default function SalesListView({ sales, products, channels, setSales, com
                 <table className="w-full text-left border-collapse">
                     <thead>
                         <tr className="border-b border-brand-borderBg text-xs font-bold text-gray-400 uppercase">
-                            <th className="pb-3 pr-2">Data</th>
+                            <th className="pb-3 pr-2">Data / Hora</th>
                             <th className="pb-3 pr-2">Canal</th>
                             <th className="pb-3 pr-2">Produto</th>
                             <th className="pb-3 text-center pr-2">Qtd</th>
@@ -79,7 +79,9 @@ export default function SalesListView({ sales, products, channels, setSales, com
                             const fin = compute(sale);
                             return (
                                 <tr key={sale.id} className="hover:bg-white/[0.02] transition-colors">
-                                    <td className="py-4 text-xs font-bold text-gray-400 whitespace-nowrap pr-2">{sale.date}</td>
+                                    <td className="py-4 text-xs font-bold text-gray-400 whitespace-nowrap pr-2">
+                                        {sale.date && sale.date.includes('T') ? new Date(sale.date).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : (sale.date ? sale.date.split('T')[0].split('-').reverse().join('/') : '')}
+                                    </td>
                                     <td className="py-4 font-semibold pr-2 animate-pulse-once" style={{ color: chan?.color }}>
                                         {chan?.name || 'Excluído'}
                                     </td>
@@ -215,11 +217,11 @@ export default function SalesListView({ sales, products, channels, setSales, com
                             
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Data da Venda</label>
+                                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Data e Hora da Venda</label>
                                     <input 
-                                        type="date"
+                                        type="datetime-local"
                                         required
-                                        value={editingSale.date}
+                                        value={editingSale.date && editingSale.date.includes('T') ? editingSale.date.slice(0, 16) : (editingSale.date ? `${editingSale.date}T12:00` : '')}
                                         onChange={e => setEditingSale({...editingSale, date: e.target.value})}
                                         className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange"
                                     />
