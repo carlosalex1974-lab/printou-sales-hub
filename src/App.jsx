@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { BarChart3, ShoppingBag, Printer, Sliders, Plus, Bolt, X, PieChart, Truck, Wallet, Sun, Moon, Package, Menu, DollarSign, Facebook } from 'lucide-react';
 import DashboardView from './components/Dashboard';
 import DashboardCharts from './components/DashboardCharts';
@@ -29,7 +29,50 @@ const INITIAL_PRODUCTS = [];
 const INITIAL_FILAMENTS = [];
 const INITIAL_SALES = [];
 
+
+function useCloudSync(collection, dataArray, isLoaded) {
+    const prevData = useRef(dataArray);
+    const hasInitialized = useRef(false);
+
+    useEffect(() => {
+        if (!isLoaded) return;
+        
+        if (!hasInitialized.current) {
+            prevData.current = dataArray;
+            hasInitialized.current = true;
+            return;
+        }
+
+        const current = dataArray;
+        const prev = prevData.current;
+
+        const addedOrChanged = current.filter(item => {
+            const oldItem = prev.find(o => o.id === item.id);
+            return !oldItem || JSON.stringify(oldItem) !== JSON.stringify(item);
+        });
+
+        const deleted = prev.filter(oldItem => !current.find(i => i.id === oldItem.id));
+
+        addedOrChanged.forEach(item => {
+            fetch(`/api/item/${collection}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(item)
+            }).catch(console.error);
+        });
+
+        deleted.forEach(item => {
+            fetch(`/api/item/${collection}/${item.id}`, {
+                method: 'DELETE'
+            }).catch(console.error);
+        });
+
+        prevData.current = current;
+    }, [dataArray, collection, isLoaded]);
+}
+
 function App() {
+
     // --- ESTADOS DO SISTEMA ---
     const [isLoaded, setIsLoaded] = useState(false);
     const [currentUser, setCurrentUser] = useState(() => {
