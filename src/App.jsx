@@ -687,7 +687,7 @@ function App() {
                 )}
 
                 {activeTab === 'estoque' && (
-                    <EstoqueView filaments={filaments} setFilaments={setFilaments} suppliers={suppliers} products={products} setProducts={setProducts} />
+                    <EstoqueView filaments={filaments} setFilaments={setFilaments} suppliers={suppliers} products={products} setProducts={setProducts} calculateCost={calculateProductCost} />
                 )}
 
                 {activeTab === 'expenses' && (

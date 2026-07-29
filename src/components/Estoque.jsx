@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Minus, Trash2, Package } from 'lucide-react';
 
-export default function Estoque({ filaments, setFilaments, suppliers, products = [], setProducts }) {
+export default function Estoque({ filaments, setFilaments, suppliers, products = [], setProducts, calculateCost }) {
     const [isAdding, setIsAdding] = useState(false);
     const [newFilament, setNewFilament] = useState({
         name: '',
@@ -57,6 +57,9 @@ export default function Estoque({ filaments, setFilaments, suppliers, products =
             setProducts(products.map(p => p.id === id ? { ...p, stock: val } : p));
         }
     };
+
+    const totalItems = products.reduce((acc, p) => acc + (p.stock || 0), 0);
+    const totalInvested = products.reduce((acc, p) => acc + ((p.stock || 0) * (calculateCost ? calculateCost(p) : 0)), 0);
 
     return (
         <div className="space-y-8 animate-fade-in">
@@ -156,7 +159,20 @@ export default function Estoque({ filaments, setFilaments, suppliers, products =
 
             {/* Seção 1: Estoque de Produtos Prontos */}
             <div>
-                <h4 className="text-lg font-black text-white mb-4 border-l-4 border-brand-orange pl-3">Estoque de Produtos Prontos</h4>
+                <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-lg font-black text-white border-l-4 border-brand-orange pl-3">Estoque de Produtos Prontos</h4>
+                    <div className="flex gap-4">
+                        <div className="bg-[#16161A] border border-white/5 px-4 py-2 rounded-xl text-right">
+                            <span className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest">Total em Estoque</span>
+                            <span className="text-sm font-black text-white">{totalItems} unidades</span>
+                        </div>
+                        <div className="bg-brand-orange/10 border border-brand-orange/20 px-4 py-2 rounded-xl text-right">
+                            <span className="block text-[10px] font-bold text-brand-orange uppercase tracking-widest">Valor Investido</span>
+                            <span className="text-sm font-black text-brand-orange">R$ {totalInvested.toFixed(2)}</span>
+                        </div>
+                    </div>
+                </div>
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     {products.length === 0 ? (
                         <div className="col-span-full text-center py-8 glass-panel border border-white/5">
