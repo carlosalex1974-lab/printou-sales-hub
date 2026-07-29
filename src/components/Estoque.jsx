@@ -58,8 +58,8 @@ export default function Estoque({ filaments, setFilaments, suppliers, products =
         }
     };
 
-    const totalItems = products.reduce((acc, p) => acc + (p.stock || 0), 0);
-    const totalInvested = products.reduce((acc, p) => acc + ((p.stock || 0) * (calculateCost ? calculateCost(p) : 0)), 0);
+    const totalItems = products.reduce((acc, p) => acc + (parseInt(p.stock) || 0), 0);
+    const totalInvested = products.reduce((acc, p) => acc + ((parseInt(p.stock) || 0) * (calculateCost ? calculateCost(p) : 0)), 0);
 
     return (
         <div className="space-y-8 animate-fade-in">
