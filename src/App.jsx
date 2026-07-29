@@ -203,37 +203,24 @@ function App() {
         }
     }, [newSale.channelId, newSale.grossValue, channels]);
 
-    // Sincronização geral com LocalStorage e Banco de Dados Local (com debounce de 100ms)
+    // Sincronização LocalStorage (Cloud agora é granular via useCloudSync)
     useEffect(() => {
-        if (!isLoaded) return; // Não sincroniza até carregar o banco de dados real
+        if (!isLoaded) return;
         localStorage.setItem('printou_channels', JSON.stringify(channels));
         localStorage.setItem('printou_products', JSON.stringify(products));
         localStorage.setItem('printou_sales', JSON.stringify(sales));
         localStorage.setItem('printou_suppliers', JSON.stringify(suppliers));
         localStorage.setItem('printou_expenses', JSON.stringify(expenses));
         localStorage.setItem('printou_filaments', JSON.stringify(filaments));
-
-        const sync = async () => {
-            try {
-                await fetch('/api/data', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        sales,
-                        products,
-                        channels,
-                        suppliers,
-                        expenses,
-                        filaments
-                    })
-                });
-            } catch (err) {
-                // Silencioso: continua usando LocalStorage normalmente se offline
-            }
-        };
-        const timer = setTimeout(sync, 100);
-        return () => clearTimeout(timer);
     }, [channels, products, sales, suppliers, expenses, filaments, isLoaded]);
+
+    useCloudSync('sales', sales, isLoaded);
+    useCloudSync('products', products, isLoaded);
+    useCloudSync('channels', channels, isLoaded);
+    useCloudSync('suppliers', suppliers, isLoaded);
+    useCloudSync('expenses', expenses, isLoaded);
+    useCloudSync('filaments', filaments, isLoaded);
+
 
     // --- CÁLCULO DE CUSTO DO PRODUTO (Com Taxa de Perda/Falha ou Custo de Revenda) ---
     const calculateProductCost = (prod) => {

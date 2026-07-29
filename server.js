@@ -184,6 +184,237 @@ app.get('/api/data', async (req, res) => {
 });
 
 // Endpoint para salvar dados
+
+// Endpoint granular para criar/atualizar um único item em uma coleção
+app.post('/api/item/:collection', async (req, res) => {
+    try {
+        const { collection } = req.params;
+        const item = req.body;
+        const allowed = ['products', 'sales', 'filaments', 'suppliers', 'expenses', 'channels'];
+        if (!allowed.includes(collection)) return res.status(400).json({error: 'Invalid collection'});
+        
+        // Tentativa de update
+        const result = await sysCol.updateOne(
+            { _id: 'main', [`${collection}.id`]: item.id },
+            { $set: { [`${collection}.import express from 'express';
+import cors from 'cors';
+import fs from 'fs';
+import { MongoClient } from 'mongodb';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const app = express();
+const PORT = process.env.PORT || 3001;
+const DB_DIR = path.join(__dirname, 'data');
+const DB_FILE = path.join(DB_DIR, 'db.json');
+
+// Trava em memória para evitar concorrência/duplicação de webhooks
+const activeLocks = new Set();
+
+const uri = "mongodb+srv://carlosalex1974_db_user:kPMDLXtyBwR4NUtd@printouhub.zn8nyjr.mongodb.net/?retryWrites=true&w=majority&appName=PrintouHub";
+const client = new MongoClient(uri);
+let sysCol;
+async function connectDB() {
+    await client.connect();
+    sysCol = client.db("printou").collection("system");
+    console.log("Conectado ao MongoDB Atlas!");
+}
+connectDB().catch(console.error);
+
+
+app.use(cors());
+app.use(express.json({ limit: '50mb' }));
+
+// Servir arquivos estáticos do React em produção
+app.use(express.static(path.join(__dirname, 'dist')));
+// Servir a pasta de imagens assets diretamente
+app.use('/assets', express.static(path.join(__dirname, 'assets')));
+
+// Banco de dados Mock Padrão Inicial
+const DEFAULT_DB = {
+    channels: [
+        { id: 'ml1', name: 'printoustudio3d (Clássico)', commission: 12.0, fixedFee: 6.0, color: '#7C3AED', hasFreeShippingThreshold: true, freeShippingThreshold: 79.0, defaultSellerShippingCost: 19.90, defaultBelowThresholdShippingCost: 0.0 },
+        { id: 'ml2', name: 'AlucarPrintoustudio3d (Premium)', commission: 19.5, fixedFee: 6.0, color: '#14B8A6', hasFreeShippingThreshold: true, freeShippingThreshold: 79.0, defaultSellerShippingCost: 19.90, defaultBelowThresholdShippingCost: 0.0 },
+        { id: 'shopee', name: 'Shopee', commission: 14.0, fixedFee: 3.0, color: '#EE4D2D', hasFreeShippingThreshold: false, freeShippingThreshold: 0, defaultSellerShippingCost: 0.0, defaultBelowThresholdShippingCost: 0.0 },
+        { id: 'site', name: 'Site Próprio', commission: 3.99, fixedFee: 0.5, color: '#0088FF', hasFreeShippingThreshold: false, freeShippingThreshold: 0, defaultSellerShippingCost: 0.0, defaultBelowThresholdShippingCost: 0.0 },
+        { id: 'direta', name: 'Venda Direta / Pix', commission: 0.0, fixedFee: 0.0, color: '#30D158', hasFreeShippingThreshold: false, freeShippingThreshold: 0, defaultSellerShippingCost: 0.0, defaultBelowThresholdShippingCost: 0.0 }
+    ],
+    suppliers: [],
+    expenses: [],
+    products: [],
+    filaments: [],
+    sales: [],
+    monthlyClosings: [],
+    integrationLogs: [],
+    credentials: {
+        mercadolivre: { clientId: '', clientSecret: '', webhookUrl: 'http://localhost:3001/api/webhooks/mercadolivre', status: 'Não Sincronizado' },
+        shopee: { shopId: '', apiKey: '', webhookUrl: 'http://localhost:3001/api/webhooks/shopee', status: 'Não Sincronizado' },
+        site: { apiKey: '', apiSecret: '', webhookUrl: 'http://localhost:3001/api/webhooks/site', status: 'Não Sincronizado' },
+        facebook: { accessToken: '', pageId: '1117637594770324', businessId: '1550133536629313', catalogId: '', status: 'Não Sincronizado' }
+    },
+    users: [
+        { email: 'admin@printou.com', password: 'admin123', name: 'Administrador Printou', role: 'admin' },
+        { email: 'operador@printou.com', password: 'printou123', name: 'Operador Printou', role: 'employee' }
+    ]
+};
+
+
+
+// Helper para ler DB
+async function readDb() {
+    let db;
+    try {
+        const doc = await sysCol.findOne({_id: 'main'});
+        db = doc || JSON.parse(JSON.stringify(DEFAULT_DB));
+    } catch (e) {
+        console.error("Erro no MongoDB:", e);
+        db = JSON.parse(JSON.stringify(DEFAULT_DB));
+    }
+    
+    db.credentials = db.credentials || {};
+    
+    db.credentials.mercadolivre = db.credentials.mercadolivre || {};
+    db.credentials.mercadolivre.clientId = process.env.ML_CLIENT_ID || db.credentials.mercadolivre.clientId || '';
+    db.credentials.mercadolivre.clientSecret = process.env.ML_CLIENT_SECRET || db.credentials.mercadolivre.clientSecret || '';
+    
+    db.credentials.mercadolivre2 = db.credentials.mercadolivre2 || {};
+    db.credentials.mercadolivre2.clientId = process.env.ML2_CLIENT_ID || db.credentials.mercadolivre2.clientId || '';
+    db.credentials.mercadolivre2.clientSecret = process.env.ML2_CLIENT_SECRET || db.credentials.mercadolivre2.clientSecret || '';
+    
+    db.credentials.shopee = db.credentials.shopee || {};
+    db.credentials.shopee.shopId = process.env.SHOPEE_SHOP_ID || db.credentials.shopee.shopId || '';
+    db.credentials.shopee.apiKey = process.env.SHOPEE_API_KEY || db.credentials.shopee.apiKey || '';
+    
+    db.credentials.site = db.credentials.site || {};
+    db.credentials.site.apiKey = process.env.SITE_API_KEY || db.credentials.site.apiKey || '';
+    db.credentials.site.apiSecret = process.env.SITE_API_SECRET || db.credentials.site.apiSecret || '';
+
+    db.credentials.facebook = db.credentials.facebook || {};
+    db.credentials.facebook.accessToken = process.env.FB_ACCESS_TOKEN || db.credentials.facebook.accessToken || '';
+    db.credentials.facebook.pageId = process.env.FB_PAGE_ID || db.credentials.facebook.pageId || '1117637594770324';
+    db.credentials.facebook.businessId = process.env.FB_BUSINESS_ID || db.credentials.facebook.businessId || '1550133536629313';
+    db.credentials.facebook.catalogId = process.env.FB_CATALOG_ID || db.credentials.facebook.catalogId || '';
+
+    if (db.credentials.mercadolivre.clientId && db.credentials.mercadolivre.clientSecret) db.credentials.mercadolivre.status = 'Sincronizado';
+    if (db.credentials.mercadolivre2.clientId && db.credentials.mercadolivre2.clientSecret) db.credentials.mercadolivre2.status = 'Sincronizado';
+    if (db.credentials.shopee.shopId && db.credentials.shopee.apiKey) db.credentials.shopee.status = 'Sincronizado';
+    if (db.credentials.site.apiKey && db.credentials.site.apiSecret) db.credentials.site.status = 'Sincronizado';
+    if (db.credentials.facebook.accessToken) db.credentials.facebook.status = 'Sincronizado';
+    else db.credentials.facebook.status = 'Nao Sincronizado';
+
+    db.monthlyClosings = db.monthlyClosings || [];
+    return db;
+}
+
+// Helper para salvar DB com escrita atômica e backups automáticos rotativos
+async function saveDb(data) {
+    try {
+        const { _id, ...updateData } = data;
+        await sysCol.updateOne({_id: 'main'}, {$set: updateData}, {upsert: true});
+    } catch(e) {
+        console.error("Erro ao salvar no MongoDB:", e);
+    }
+}
+
+// Endpoint para listar fechamentos mensais
+app.get('/api/monthly-closings', async (req, res) => {
+    try {
+        const db = await readDb();
+        res.json(db.monthlyClosings || []);
+    } catch (error) {
+        console.error("Erro ao ler fechamentos mensais:", error);
+        res.status(500).json({ error: "Erro ao ler fechamentos" });
+    }
+});
+
+// Endpoint para realizar fechamento mensal
+app.post('/api/monthly-closings', async (req, res) => {
+    try {
+        const { month, grossRevenue, netProfit, totalExpenses, realNet, salesCount, stockMovementsCount, stockSnapshot } = req.body;
+        
+        if (!month) {
+            return res.status(400).json({ error: "Mês é obrigatório" });
+        }
+
+        const db = await readDb();
+        db.monthlyClosings = db.monthlyClosings || [];
+
+        // Evitar duplicidade de fechamento para o mesmo mês
+        if (db.monthlyClosings.some(c => c.month === month)) {
+            return res.status(400).json({ error: `O mês ${month} já está fechado.` });
+        }
+
+        const closing = {
+            id: 'close-' + Date.now(),
+            month,
+            closedAt: new Date().toISOString(),
+            grossRevenue: parseFloat(grossRevenue) || 0,
+            netProfit: parseFloat(netProfit) || 0,
+            totalExpenses: parseFloat(totalExpenses) || 0,
+            realNet: parseFloat(realNet) || 0,
+            salesCount: parseInt(salesCount) || 0,
+            stockMovementsCount: parseInt(stockMovementsCount) || 0,
+            stockSnapshot: stockSnapshot || []
+        };
+
+        db.monthlyClosings.push(closing);
+        await saveDb(db);
+
+        res.json({ success: true, closing });
+    } catch (error) {
+        console.error("Erro ao registrar fechamento mensal:", error);
+        res.status(500).json({ error: "Erro ao registrar fechamento" });
+    }
+});
+
+// Endpoint para ler dados
+app.get('/api/data', async (req, res) => {
+    try {
+        const data = await readDb();
+        res.json(data);
+    } catch (error) {
+        console.error("Erro ao ler banco de dados local:", error);
+        res.status(500).json({ error: "Erro ao ler banco de dados" });
+    }
+});
+
+// Endpoint para salvar dados
+]: item } }
+        );
+        
+        // Se não existir, faz um push (cria novo)
+        if (result.matchedCount === 0) {
+            await sysCol.updateOne(
+                { _id: 'main' },
+                { $push: { [collection]: item } }
+            );
+        }
+        res.json({ success: true });
+    } catch(e) { 
+        res.status(500).json({error: e.message}); 
+    }
+});
+
+// Endpoint granular para deletar um único item em uma coleção
+app.delete('/api/item/:collection/:id', async (req, res) => {
+    try {
+        const { collection, id } = req.params;
+        const allowed = ['products', 'sales', 'filaments', 'suppliers', 'expenses', 'channels'];
+        if (!allowed.includes(collection)) return res.status(400).json({error: 'Invalid collection'});
+        
+        await sysCol.updateOne(
+            { _id: 'main' },
+            { $pull: { [collection]: { id: id } } }
+        );
+        res.json({ success: true });
+    } catch(e) { 
+        res.status(500).json({error: e.message}); 
+    }
+});
+
 app.post('/api/data', async (req, res) => {
     try {
         const newData = req.body;
