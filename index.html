@@ -600,7 +600,10 @@
                     }
                 };
                 const timer = setTimeout(sync, 100);
-                return () => clearTimeout(timer);
+    const totalItems = products.reduce((acc, p) => acc + (parseInt(p.stock) || 0), 0);
+            const totalInvested = products.reduce((acc, p) => acc + ((parseInt(p.stock) || 0) * (calculateCost ? calculateCost(p) : 0)), 0);
+
+            return () => clearTimeout(timer);
             }, [channels, products, sales, suppliers, expenses, filaments]);
 
             // Re-inicializar ícones Lucide
@@ -5802,16 +5805,26 @@
                     {/* Cabeçalho */}
                     <div className="flex justify-between items-center">
                         <div>
-                            <h2 className="text-2xl font-black text-white">Controle de Estoque & Inventário</h2>
-                            <p className="text-gray-400 text-xs mt-1">Gerencie a entrada, saída, custos e níveis de estoque dos seus produtos de forma simples e direta por unidade.</p>
-                        </div>
-                        <button 
-                            onClick={() => setIsAdding(!isAdding)}
-                            className="bg-brand-orange hover:bg-brand-orange-dark text-black font-extrabold px-6 py-3 rounded-xl transition-all shadow-lg text-xs uppercase tracking-wider"
-                        >
-                            {isAdding ? 'Fechar Painel' : '+ Cadastrar Novo Item'}
-                        </button>
-                    </div>
+                            
+                                <h2 className="text-2xl font-black text-white">Controle de Estoque & Inventário</h2>
+                                <p className="text-gray-400 text-xs mt-1">Gerencie a entrada, saída, custos e níveis de estoque dos seus produtos de forma simples e direta por unidade.</p>
+                            </div>
+                            <div className="flex gap-4 items-center">
+                                <div className="bg-[#16161A] border border-white/5 px-4 py-2 rounded-xl text-right">
+                                    <span className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest">Total em Estoque</span>
+                                    <span className="text-sm font-black text-white">{totalItems} unidades</span>
+                                </div>
+                                <div className="bg-brand-orange/10 border border-brand-orange/20 px-4 py-2 rounded-xl text-right">
+                                    <span className="block text-[10px] font-bold text-brand-orange uppercase tracking-widest">Valor Investido</span>
+                                    <span className="text-sm font-black text-brand-orange">R$ {totalInvested.toFixed(2)}</span>
+                                </div>
+                                <button 
+                                    onClick={() => setIsAdding(!isAdding)}
+                                    className="bg-brand-orange hover:bg-brand-orange-dark text-black font-extrabold px-6 py-3 rounded-xl transition-all shadow-lg text-xs uppercase tracking-wider"
+                                >
+                                    {isAdding ? 'Fechar Painel' : '+ Cadastrar Novo Item'}
+                                </button>
+                            </div></div>
 
                     {/* Painel de Cadastro Simplificado */}
                     {isAdding && (
