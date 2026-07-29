@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Minus, Trash2, Package } from 'lucide-react';
 
-export default function Estoque({ filaments, setFilaments, suppliers }) {
+export default function Estoque({ filaments, setFilaments, suppliers, products = [], setProducts }) {
     const [isAdding, setIsAdding] = useState(false);
     const [newFilament, setNewFilament] = useState({
         name: '',
@@ -51,12 +51,19 @@ export default function Estoque({ filaments, setFilaments, suppliers }) {
         }
     };
 
+    const handleAdjustProductStock = (id, newStock) => {
+        const val = parseInt(newStock);
+        if (!isNaN(val) && val >= 0) {
+            setProducts(products.map(p => p.id === id ? { ...p, stock: val } : p));
+        }
+    };
+
     return (
         <div className="space-y-8 animate-fade-in">
             <div className="flex justify-between items-center border-b border-brand-borderBg pb-4">
                 <div>
                     <span className="text-xs font-bold tracking-widest text-brand-orange uppercase">Logística & Materiais</span>
-                    <h3 className="font-black text-2xl text-gradient font-sans">Estoque de Filamentos</h3>
+                    <h3 className="font-black text-2xl text-gradient font-sans">Controle de Estoque</h3>
                 </div>
                 <button 
                     onClick={() => setIsAdding(!isAdding)}
@@ -147,8 +154,44 @@ export default function Estoque({ filaments, setFilaments, suppliers }) {
                 </form>
             )}
 
-            {/* Listagem das Bobinas */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Seção 1: Estoque de Produtos Prontos */}
+            <div>
+                <h4 className="text-lg font-black text-white mb-4 border-l-4 border-brand-orange pl-3">Estoque de Produtos Prontos</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {products.length === 0 ? (
+                        <div className="col-span-full text-center py-8 glass-panel border border-white/5">
+                            <p className="text-gray-400 text-sm font-semibold">Nenhum produto cadastrado no catálogo.</p>
+                        </div>
+                    ) : products.map(prod => {
+                        const isLow = (prod.stock || 0) === 0;
+                        return (
+                            <div key={prod.id} className="glass-panel p-4 rounded-xl flex items-center justify-between border border-white/5">
+                                <div className="flex-1">
+                                    <h5 className="font-bold text-white text-sm line-clamp-1">{prod.name}</h5>
+                                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">{prod.type === 'resale' ? 'Revenda' : 'Impressão 3D'}</span>
+                                    {isLow && (
+                                        <div className="text-rose-400 text-[10px] font-black uppercase mt-1 animate-pulse">Esgotado</div>
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-2 bg-[#121215] p-2 rounded-lg ml-2">
+                                    <input 
+                                        type="number" 
+                                        value={prod.stock || 0}
+                                        onChange={(e) => handleAdjustProductStock(prod.id, e.target.value)}
+                                        className="w-14 bg-[#16161A] border border-white/5 text-white rounded-md p-1.5 text-center text-sm font-extrabold focus:outline-none focus:border-brand-orange"
+                                    />
+                                    <span className="text-[10px] text-gray-400 font-bold">und</span>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+
+            {/* Seção 2: Listagem das Bobinas */}
+            <div>
+                <h4 className="text-lg font-black text-white mb-4 border-l-4 border-brand-orange pl-3 mt-8">Estoque de Filamentos (Matéria-Prima)</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filaments.length === 0 ? (
                     <div className="col-span-full text-center py-12 glass-panel">
                         <Package className="w-12 h-12 text-gray-500 mx-auto mb-4" />
@@ -218,6 +261,7 @@ export default function Estoque({ filaments, setFilaments, suppliers }) {
                         </div>
                     );
                 })}
+                </div>
             </div>
         </div>
     );

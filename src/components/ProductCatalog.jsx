@@ -5,6 +5,7 @@ export default function ProductCatalogView({ products, setProducts, calculateCos
     const [isAdding, setIsAdding] = useState(false);
     const [newProduct, setNewProduct] = useState({
         name: '',
+        stock: '0',
         type: '3d', // '3d' ou 'resale'
         weight: '',
         printTime: '',
@@ -22,6 +23,7 @@ export default function ProductCatalogView({ products, setProducts, calculateCos
         const prod = {
             id: 'p' + (products.length + 1) + Date.now().toString().slice(-2),
             name: newProduct.name,
+            stock: parseInt(newProduct.stock) || 0,
             type: newProduct.type,
             weight: newProduct.type === '3d' ? parseFloat(newProduct.weight) : 0,
             printTime: newProduct.type === '3d' ? parseFloat(newProduct.printTime) : 0,
@@ -38,6 +40,7 @@ export default function ProductCatalogView({ products, setProducts, calculateCos
         setIsAdding(false);
         setNewProduct({
             name: '',
+            stock: '0',
             type: '3d',
             weight: '',
             printTime: '',
@@ -88,7 +91,19 @@ export default function ProductCatalogView({ products, setProducts, calculateCos
                         />
                     </div>
 
-                    <div className="md:col-span-2">
+                    <div className="md:col-span-1">
+                        <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2">Estoque Inicial (Und)</label>
+                        <input 
+                            type="number" 
+                            required
+                            min="0"
+                            value={newProduct.stock}
+                            onChange={e => setNewProduct({...newProduct, stock: e.target.value})}
+                            className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange transition-all placeholder-gray-600"
+                        />
+                    </div>
+
+                    <div className="md:col-span-1">
                         <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2">Categoria de Custos</label>
                         <div className="grid grid-cols-2 gap-3">
                             <button 
@@ -288,7 +303,11 @@ export default function ProductCatalogView({ products, setProducts, calculateCos
                                     </div>
                                 ) : (
                                     /* Métricas Gerais de Custos */
-                                    <div className="grid grid-cols-3 gap-4 border-y border-white/5 py-3">
+                                    <div className="grid grid-cols-4 gap-4 border-y border-white/5 py-3">
+                                        <div>
+                                            <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider block mb-0.5">Estoque</span>
+                                            <span className="text-sm font-black text-brand-orange">{prod.stock !== undefined ? prod.stock : 0} und</span>
+                                        </div>
                                         <div>
                                             <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider block mb-0.5">{isResale ? "Método" : "Material"}</span>
                                             <span className="text-sm font-bold text-white">{isResale ? "Compra Direta" : `${prod.weight}g`}</span>

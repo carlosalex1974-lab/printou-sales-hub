@@ -339,16 +339,27 @@ function App() {
         
         if (saleToAdd.status !== 'Cancelado') {
             const prod = products.find(p => p.id === saleToAdd.productId);
-            if (prod && prod.type === '3d' && prod.filamentId) {
-                setFilaments(prevFilaments => prevFilaments.map(fil => {
-                    if (fil.id === prod.filamentId) {
-                        return { 
-                            ...fil, 
-                            currentWeight: Math.max(0, parseFloat((fil.currentWeight - (prod.weight * saleToAdd.quantity)).toFixed(1)))
-                        };
+            if (prod) {
+                // Deduzir unidades do produto acabado
+                setProducts(prevProducts => prevProducts.map(p => {
+                    if (p.id === prod.id) {
+                        return { ...p, stock: Math.max(0, (p.stock || 0) - saleToAdd.quantity) };
                     }
-                    return fil;
+                    return p;
                 }));
+
+                // Se for peça 3D, também deduzir do rolo de filamento
+                if (prod.type === '3d' && prod.filamentId) {
+                    setFilaments(prevFilaments => prevFilaments.map(fil => {
+                        if (fil.id === prod.filamentId) {
+                            return { 
+                                ...fil, 
+                                currentWeight: Math.max(0, parseFloat((fil.currentWeight - (prod.weight * saleToAdd.quantity)).toFixed(1)))
+                            };
+                        }
+                        return fil;
+                    }));
+                }
             }
         }
     };
@@ -676,7 +687,7 @@ function App() {
                 )}
 
                 {activeTab === 'estoque' && (
-                    <EstoqueView filaments={filaments} setFilaments={setFilaments} suppliers={suppliers} />
+                    <EstoqueView filaments={filaments} setFilaments={setFilaments} suppliers={suppliers} products={products} setProducts={setProducts} />
                 )}
 
                 {activeTab === 'expenses' && (
