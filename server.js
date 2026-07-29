@@ -1325,7 +1325,7 @@ async function pollMercadoLivreOrders() {
                 // Registra a venda
                 freshDb.sales.unshift({
                     id: orderId,
-                    date: todayStr,
+                    date: order.date_closed || order.date_created || new Date().toISOString(),
                     channelId,
                     productId: product.id,
                     quantity,
