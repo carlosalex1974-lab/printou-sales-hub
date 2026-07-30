@@ -611,7 +611,7 @@
                 }
             }, [activeTab, isSaleModalOpen, sales, products, expenses, theme]);
 
-            // --- CÃLCULO DE CUSTO DO PRODUTO (Com Taxa de Perda/Falha ou Custo de Revenda) ---
+            // --- CÃLCULO DE CUSTO DO PRODUTO (Com Taxa de Perda/Falha ou Custo de Revenda) ---
             const calculateProductCost = (prod) => {
                 if (prod.type === 'resale') {
                     return parseFloat((prod.acquisitionCost || 0).toFixed(2));
@@ -623,7 +623,7 @@
                 return parseFloat((rawCost + prod.finishingCost + prod.packagingCost).toFixed(2));
             };
 
-            // --- LÃ“GICA DE CÃLCULO FINANCEIRO POR VENDA ---
+            // --- LÃ“GICA DE CÃLCULO FINANCEIRO POR VENDA ---
             const computeSaleFinancials = (sale) => {
                 const prod = findProduct(sale.productId);
                 const chan = channels.find(c => c.id === sale.channelId);
@@ -1021,7 +1021,7 @@
                         {products.filter(p => p.isPendingConfig).length > 0 && (
                             <div className="mb-6 glass-panel border-rose-500/30 bg-rose-500/5 p-4 rounded-xl flex items-center justify-between text-rose-400 text-sm animate-pulse-once">
                                 <span className="flex items-center gap-2 font-semibold">
-                                    âš ï¸ VocÃª tem {products.filter(p => p.isPendingConfig).length} produto(s) importado(s) pendente(s) de configuraÃ§Ã£o de custo/ficha tÃ©cnica!
+                                    âš ï¸ VocÃª tem {products.filter(p => p.isPendingConfig).length} produto(s) importado(s) pendente(s) de configuraÃ§Ã£o de custo/ficha tÃ©cnica!
                                 </span>
                                 <button 
                                     onClick={() => setActiveTab('products')}
@@ -1728,7 +1728,7 @@
             }
         }
 
-        // --- COMPONENTE DE GRÃFICOS INTERATIVOS (CHART.JS) ---
+        // --- COMPONENTE DE GRÃFICOS INTERATIVOS (CHART.JS) ---
         function DashboardChartsView({ sales, channels, compute, selectedMonth }) {
             const lineCanvasRef = React.useRef(null);
             const doughnutCanvasRef = React.useRef(null);
@@ -2059,7 +2059,7 @@
                                     <i data-lucide="activity" className="w-6 h-6"></i>
                                 </div>
                                 <div>
-                                    <h4 className="font-extrabold text-white text-base">âš ï¸ Alerta de Insumos CrÃ­ticos no Estoque!</h4>
+                                    <h4 className="font-extrabold text-white text-base">âš ï¸ Alerta de Insumos CrÃ­ticos no Estoque!</h4>
                                     <p className="text-xs text-gray-400">
                                         As seguintes bobinas de filamento estÃ£o com peso abaixo do limite configurado:
                                     </p>
@@ -2148,7 +2148,7 @@
                             {/* Top 5 Produtos Mais Vendidos */}
                             <div className="glass-panel rounded-2xl p-6">
                                 <h3 className="font-bold text-lg mb-6 flex items-center gap-2">
-                                    ðŸ† Top 5 Mais Vendidos ({selectedMonth})
+                                    ðŸ† Top 5 Mais Vendidos ({selectedMonth})
                                 </h3>
                                 <div className="space-y-4">
                                     {topProducts.length === 0 ? (
@@ -2849,7 +2849,7 @@
                     {isAdding && (
                         <form onSubmit={isEditing ? handleUpdateProduct : handleSaveProduct} className="glass-panel border border-white/15 rounded-2xl p-6 grid grid-cols-1 md:grid-cols-4 gap-5 animate-fade-in shadow-2xl">
                             <h4 className="md:col-span-4 font-extrabold text-white text-sm uppercase tracking-wider border-b border-white/5 pb-2 flex justify-between items-center">
-                                <span>{isEditing ? `ðŸ“ Editar Produto (SKU: ${editingProduct.id})` : "âœ¨ Cadastrar Novo Produto"}</span>
+                                <span>{isEditing ? `ðŸ“ Editar Produto (SKU: ${editingProduct.id})` : "âœ¨ Cadastrar Novo Produto"}</span>
                                 {isEditing && (
                                     <button 
                                         type="button" 
@@ -3200,7 +3200,7 @@
 
                                         {prod.isPendingConfig ? (
                                             <div className="p-3 bg-rose-500/10 border border-rose-500/25 rounded-xl flex items-center justify-between">
-                                                <span className="text-xs text-rose-400 font-medium">âš ï¸ Cadastro provisÃ³rio pendente de ajustes</span>
+                                                <span className="text-xs text-rose-400 font-medium">âš ï¸ Cadastro provisÃ³rio pendente de ajustes</span>
                                                 <button 
                                                     onClick={() => {
                                                         const newName = prompt("Confirme o nome do produto:", prod.name);
@@ -3872,7 +3872,7 @@
             };
 
             const handleResetDatabase = async () => {
-                if (confirm("âš ï¸ ATENÃ‡ÃƒO: Tem certeza que deseja zerar TODAS as vendas, despesas, catÃ¡logo de produtos e estoque de filamentos? Isso apagarÃ¡ todos os dados de simulaÃ§Ã£o e criarÃ¡ um banco limpo. As suas chaves de API/Credenciais e Canais NÃƒO serÃ£o excluÃ­dos.")) {
+                if (confirm("âš ï¸ ATENÃ‡ÃƒO: Tem certeza que deseja zerar TODAS as vendas, despesas, catÃ¡logo de produtos e estoque de filamentos? Isso apagarÃ¡ todos os dados de simulaÃ§Ã£o e criarÃ¡ um banco limpo. As suas chaves de API/Credenciais e Canais NÃƒO serÃ£o excluÃ­dos.")) {
                     try {
                         const response = await fetch('/api/data/reset', { method: 'POST' });
                         if (response.ok) {
@@ -4259,7 +4259,7 @@
                         <form onSubmit={handleLogin} className="space-y-5 relative z-10">
                             {error && (
                                 <div className="p-3.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs rounded-xl font-bold text-center">
-                                    âš ï¸ {error}
+                                    âš ï¸ {error}
                                 </div>
                             )}
 
@@ -4619,7 +4619,7 @@
                 });
             }, [sales, channels]);
 
-            // --- CÃLCULOS DO DRE DO MÃŠS SELECIONADO ---
+            // --- CÃLCULOS DO DRE DO MÃŠS SELECIONADO ---
             const dreStats = useMemo(() => {
                 let totalGross = 0;
                 let totalCost = 0;
@@ -4787,7 +4787,7 @@
                                 {/* Mais Vendidos */}
                                 <div className="glass-panel p-6 rounded-2xl">
                                     <h4 className="font-extrabold text-white text-lg mb-6 flex items-center gap-2">
-                                        ðŸ† Modelos Mais Vendidos (Qtd.)
+                                        ðŸ† Modelos Mais Vendidos (Qtd.)
                                     </h4>
                                     <div className="space-y-4">
                                         {topProducts.length === 0 ? (
@@ -4954,7 +4954,7 @@
                                         </div>
 
                                         <div className="bg-[#121215] border border-white/5 rounded-xl p-4 text-xs text-gray-400 leading-relaxed space-y-2">
-                                            <p className="font-bold text-amber-500">âš ï¸ IMPORTANTE E ATENÃ‡ÃƒO:</p>
+                                            <p className="font-bold text-amber-500">âš ï¸ IMPORTANTE E ATENÃ‡ÃƒO:</p>
                                             <ul className="list-disc pl-4 space-y-1 text-gray-300">
                                                 <li>Qualquer tentativa de criar, editar ou deletar vendas ou despesas correspondentes ao mÃªs de {selectedMonth} serÃ¡ bloqueada no sistema.</li>
                                                 <li>O snapshot capturarÃ¡ o total de produtos cadastrados atualmente e gravarÃ¡ os valores de custo e estoque fÃ­sico da prateleira hoje.</li>
@@ -5269,7 +5269,7 @@
                     )}
                     {errorMessage && (
                         <div className="fixed bottom-4 right-4 bg-rose-500/90 backdrop-blur text-white px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 z-50 animate-bounce">
-                            <span className="text-lg font-bold">âš ï¸</span>
+                            <span className="text-lg font-bold">âš ï¸</span>
                             <span className="text-sm font-bold">{errorMessage}</span>
                         </div>
                     )}
@@ -5300,7 +5300,7 @@
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                         <div className="glass-panel p-6 rounded-2xl border border-white/5 flex items-center gap-4">
                             <div className="p-3 bg-brand-orange/10 text-brand-orange rounded-xl">
-                                <span className="text-xl">ðŸ›ï¸</span>
+                                <span className="text-xl">ðŸ›ï¸</span>
                             </div>
                             <div>
                                 <span className="text-[10px] text-gray-500 font-extrabold uppercase tracking-widest">Shopify CatÃ¡logo</span>
@@ -5330,7 +5330,7 @@
 
                         <div className="glass-panel p-6 rounded-2xl border border-white/5 flex items-center gap-4">
                             <div className="p-3 bg-brand-yellow/10 text-brand-yellow rounded-xl">
-                                <span className="text-xl">âš™ï¸</span>
+                                <span className="text-xl">âš™ï¸</span>
                             </div>
                             <div>
                                 <span className="text-[10px] text-gray-500 font-extrabold uppercase tracking-widest">Status ConexÃ£o</span>
@@ -5368,12 +5368,12 @@
                         </button>
                     </div>
 
-                    {/* ABA: CATÃLOGO */}
+                    {/* ABA: CATÃLOGO */}
                     {activeTab === 'catalog' && (
                         <div className="space-y-6">
                             {productsList.length === 0 ? (
                                 <div className="glass-panel p-12 text-center rounded-2xl border border-white/5 space-y-4">
-                                    <span className="text-4xl block mb-2">ðŸ›ï¸</span>
+                                    <span className="text-4xl block mb-2">ðŸ›ï¸</span>
                                     <div>
                                         <h4 className="text-lg font-bold text-white">Nenhum produto sincronizado do site</h4>
                                         <p className="text-sm text-gray-500 max-w-md mx-auto mt-1">
@@ -5446,7 +5446,7 @@
                                                         title="Excluir produto do painel"
                                                         className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 px-3.5 rounded-xl transition-all flex items-center justify-center"
                                                     >
-                                                        <span>ðŸ—‘ï¸</span>
+                                                        <span>ðŸ—‘ï¸</span>
                                                     </button>
                                                 </div>
                                             </div>
@@ -5832,7 +5832,7 @@ return (
                         <div className="glass-panel border border-brand-orange/30 p-6 rounded-2xl animate-fade-in">
                             <h3 className="text-base font-extrabold text-white uppercase tracking-wider mb-6 flex items-center gap-2">
                                 <span className="w-2.5 h-2.5 rounded-full bg-brand-orange"></span>
-                                {editingItem ? `âœï¸ Editar Item do Estoque (SKU: ${editingItem.id})` : "Cadastrar Novo Item no Estoque"}
+                                {editingItem ? `âœï¸ Editar Item do Estoque (SKU: ${editingItem.id})` : "Cadastrar Novo Item no Estoque"}
                             </h3>
                             <form onSubmit={handleSaveItem} className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 <div>
@@ -5973,7 +5973,7 @@ return (
                                         : 'bg-transparent border-brand-borderBg text-gray-400 hover:text-white'
                                 }`}
                             >
-                                {filterLowStock ? 'âš ï¸ Apenas Estoque Baixo' : 'Mostrar Todos'}
+                                {filterLowStock ? 'âš ï¸ Apenas Estoque Baixo' : 'Mostrar Todos'}
                             </button>
                         </div>
                     </div>
@@ -6310,7 +6310,7 @@ return (
                     switch(category) {
                         case 'Agua': return 'ðŸ’§';
                         case 'Luz': return 'âš¡';
-                        case 'Telefone': return 'ðŸŒ';
+                        case 'Telefone': return 'ðŸŒ';
                         case 'Contador': return 'ðŸ’¼';
                         default: return 'ðŸ’¸';
                     }
@@ -6364,9 +6364,9 @@ return (
                                         value={newExpense.category} onChange={e => setNewExpense({...newExpense, category: e.target.value})}
                                         className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange"
                                     >
-                                        <option value="Agua">ðŸ’§ Ãgua</option>
+                                        <option value="Agua">ðŸ’§ Ãgua</option>
                                         <option value="Luz">âš¡ Luz</option>
-                                        <option value="Telefone">ðŸŒ Telefone & Internet</option>
+                                        <option value="Telefone">ðŸŒ Telefone & Internet</option>
                                         <option value="Contador">ðŸ’¼ Contador</option>
                                         <option value="Outros">ðŸ’¸ Outros</option>
                                     </select>
