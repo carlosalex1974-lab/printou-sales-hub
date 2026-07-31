@@ -1209,9 +1209,9 @@ async function pollMercadoLivreOrders() {
                 continue;
             }
 
-            // Busca pedidos das últimas 6 horas
+            // Busca pedidos das ultimas 72 horas
             const since = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
-            const url = `https://api.mercadolibre.com/orders/search?seller=${creds.userId}&order.date_created.from=${since}&sort=date_desc&limit=20`;
+            const url = `https://api.mercadolibre.com/orders/search?seller=${creds.userId}&order.date_created.from=${since}&sort=date_desc&limit=50`;
 
             const response = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${accessToken}` }
@@ -1382,7 +1382,7 @@ async function pollCancelledOrders() {
 
         // Busca pedidos cancelados recentes
         const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-        const url = `https://api.mercadolibre.com/orders/search?seller=${creds.userId}&order.status=cancelled&order.date_created.from=${since}&limit=20`;
+        const url = `https://api.mercadolibre.com/orders/search?seller=${creds.userId}&order.status=cancelled&order.date_created.from=${since}&limit=50`;
 
         const response = await fetch(url, {
             headers: { 'Authorization': `Bearer ${accessToken}` }
