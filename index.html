@@ -3309,12 +3309,23 @@
                                 <div className="space-y-4">
                                     <div>
                                         <label className="block text-[10px] font-bold text-gray-400 mb-2 uppercase tracking-widest">Produto Mestre Principal:</label>
+                                        <input 
+                                            type="text" 
+                                            placeholder="Digite para pesquisar rapidamente..."
+                                            value={linkingSearch}
+                                            onChange={(e) => setLinkingSearch(e.target.value)}
+                                            className="w-full bg-[#16161A] border border-white/10 text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange text-xs font-semibold mb-3"
+                                        />
                                         <select 
                                             id="master-product-select"
                                             className="w-full bg-[#16161A] border border-white/10 text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange text-xs font-semibold"
+                                            size="5"
                                         >
                                             <option value="">-- Escolha o produto Mestre --</option>
-                                            {products.filter(p => p.id !== linkingProduct.id).map(p => (
+                                            {products
+                                                .filter(p => p.id !== linkingProduct.id)
+                                                .filter(p => !linkingSearch || p.name.toLowerCase().includes(linkingSearch.toLowerCase()) || p.id.toLowerCase().includes(linkingSearch.toLowerCase()))
+                                                .map(p => (
                                                 <option key={p.id} value={p.id}>
                                                     {p.name} (SKU: {p.id})
                                                 </option>
