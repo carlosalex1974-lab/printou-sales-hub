@@ -1922,8 +1922,12 @@
                         }
                     });
                 }
-
-                }, [sales, channels, selectedMonth, monthlyClosings]);
+                return () => {
+                    if (lineChartRef.current) lineChartRef.current.destroy();
+                    if (doughnutChartRef.current) doughnutChartRef.current.destroy();
+                    if (closingsChartRef.current) closingsChartRef.current.destroy();
+                };
+            }, [sales, channels, selectedMonth, monthlyClosings]);
 
             return (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
