@@ -1895,8 +1895,8 @@
                                 {
                                     label: 'Resultado Líquido Real',
                                     data: cRealNet,
-                                    backgroundColor: cRealNet.map(v => v >= 0 ? 'rgba(16, 185, 129, 0.5)' : 'rgba(244, 63, 94, 0.5)'),
-                                    borderColor: cRealNet.map(v => v >= 0 ? '#10B981' : '#F43F5E'),
+                                    backgroundColor: 'rgba(16, 185, 129, 0.5)',
+                                    borderColor: '#10B981',
                                     borderWidth: 1,
                                     borderRadius: 4
                                 }
@@ -1964,7 +1964,7 @@
                             <h4 className="font-extrabold text-white text-lg mt-1">Fechamentos Mensais</h4>
                         </div>
                         {monthlyClosings.length > 0 ? (
-                            <div className="mt-6 relative w-full" style={{ height: '300px' }}>
+                            <div className="mt-6 relative w-full" style={{ minHeight: '300px', height: '300px' }}>
                                 <canvas ref={closingsCanvasRef}></canvas>
                             </div>
                         ) : (
