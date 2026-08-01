@@ -17,6 +17,13 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <script>
+        window.addEventListener('error', function(event) {
+            alert('ERRO JS: ' + event.message + ' em ' + event.filename + ':' + event.lineno);
+        });
+        window.addEventListener('unhandledrejection', function(event) {
+            alert('ERRO PROMISE: ' + (event.reason ? event.reason.message || event.reason : 'desconhecido'));
+        });
+
         tailwind.config = {
             theme: {
                 extend: {
@@ -1957,7 +1964,7 @@
                             <h4 className="font-extrabold text-white text-lg mt-1">Fechamentos Mensais</h4>
                         </div>
                         {monthlyClosings.length > 0 ? (
-                            <div className="h-72 mt-6 relative">
+                            <div className="mt-6 relative w-full" style={{ height: '300px' }}>
                                 <canvas ref={closingsCanvasRef}></canvas>
                             </div>
                         ) : (
