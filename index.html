@@ -1034,7 +1034,7 @@
 
                         {/* --- CONTEÚDO DA ABA SELECIONADA --- */}
                         {activeTab === 'dashboard' && (
-                            <DashboardView stats={financeStats} sales={sales} channels={channels} products={products} compute={computeSaleFinancials} filaments={filaments} selectedMonth={selectedMonth} />
+                            <DashboardView stats={financeStats} sales={sales} channels={channels} products={products} compute={computeSaleFinancials} filaments={filaments} selectedMonth={selectedMonth} monthlyClosings={monthlyClosings} />
                         )}
 
                         {activeTab === 'sales' && (
@@ -1729,15 +1729,18 @@
         }
 
         // --- COMPONENTE DE GRÁFICOS INTERATIVOS (CHART.JS) ---
-        function DashboardChartsView({ sales, channels, compute, selectedMonth }) {
+        function DashboardChartsView({ sales, channels, compute, selectedMonth, monthlyClosings = [] }) {
             const lineCanvasRef = React.useRef(null);
             const doughnutCanvasRef = React.useRef(null);
             const lineChartRef = React.useRef(null);
             const doughnutChartRef = React.useRef(null);
+            const closingsCanvasRef = React.useRef(null);
+            const closingsChartRef = React.useRef(null);
 
             React.useEffect(() => {
                 if (lineChartRef.current) lineChartRef.current.destroy();
                 if (doughnutChartRef.current) doughnutChartRef.current.destroy();
+                if (closingsChartRef.current) closingsChartRef.current.destroy();
 
                 // 1. Evolução Mensal
                 const monthlyStats = {};
@@ -1859,7 +1862,68 @@
                     if (lineChartRef.current) lineChartRef.current.destroy();
                     if (doughnutChartRef.current) doughnutChartRef.current.destroy();
                 };
-            }, [sales, channels, selectedMonth]);
+            
+
+                // 3. Gráfico de Fechamentos Mensais
+                const sortedClosings = [...monthlyClosings].sort((a, b) => a.month.localeCompare(b.month));
+                if (closingsCanvasRef.current && sortedClosings.length > 0) {
+                    const ctx = closingsCanvasRef.current.getContext('2d');
+                    const cLabels = sortedClosings.map(c => c.month);
+                    const cGross = sortedClosings.map(c => c.grossRevenue || 0);
+                    const cRealNet = sortedClosings.map(c => c.realNet || 0);
+                    
+                    closingsChartRef.current = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: cLabels,
+                            datasets: [
+                                {
+                                    label: 'Faturamento Bruto',
+                                    data: cGross,
+                                    backgroundColor: 'rgba(59, 130, 246, 0.5)',
+                                    borderColor: '#3B82F6',
+                                    borderWidth: 1,
+                                    borderRadius: 4
+                                },
+                                {
+                                    label: 'Resultado Líquido Real',
+                                    data: cRealNet,
+                                    backgroundColor: cRealNet.map(v => v >= 0 ? 'rgba(16, 185, 129, 0.5)' : 'rgba(244, 63, 94, 0.5)'),
+                                    borderColor: cRealNet.map(v => v >= 0 ? '#10B981' : '#F43F5E'),
+                                    borderWidth: 1,
+                                    borderRadius: 4
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { labels: { color: '#9CA3AF', font: { family: 'Inter', weight: 'bold' } } },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            let label = context.dataset.label || '';
+                                            if (label) {
+                                                label += ': ';
+                                            }
+                                            if (context.parsed.y !== null) {
+                                                label += new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(context.parsed.y);
+                                            }
+                                            return label;
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                x: { grid: { display: false }, ticks: { color: '#9CA3AF' } },
+                                y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9CA3AF' } }
+                            }
+                        }
+                    });
+                }
+
+                }, [sales, channels, selectedMonth, monthlyClosings]);
 
             return (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1873,7 +1937,7 @@
                         </div>
                     </div>
 
-                    <div className="glass-panel rounded-2xl p-6 border border-white/5 flex flex-col justify-between">
+                                        <div className="glass-panel rounded-2xl p-6 border border-white/5 flex flex-col justify-between">
                         <div>
                             <span className="text-[10px] font-extrabold uppercase tracking-widest text-brand-orange">Participação</span>
                             <h4 className="font-extrabold text-white text-lg mt-1">Distribuição por Canal</h4>
@@ -1882,12 +1946,29 @@
                             <canvas ref={doughnutCanvasRef}></canvas>
                         </div>
                     </div>
+
+                    <div className="lg:col-span-3 glass-panel rounded-2xl p-6 border border-white/5 flex flex-col justify-between mt-2">
+                        <div>
+                            <span className="text-[10px] font-extrabold uppercase tracking-widest text-brand-orange">Histórico Contábil</span>
+                            <h4 className="font-extrabold text-white text-lg mt-1">Fechamentos Mensais</h4>
+                        </div>
+                        {monthlyClosings.length > 0 ? (
+                            <div className="h-72 mt-6 relative">
+                                <canvas ref={closingsCanvasRef}></canvas>
+                            </div>
+                        ) : (
+                            <div className="h-32 mt-6 flex flex-col items-center justify-center text-gray-500 bg-white/5 rounded-xl border border-white/5 border-dashed">
+                                <i data-lucide="lock" className="w-6 h-6 mb-2 text-gray-600"></i>
+                                <span className="text-xs font-bold uppercase tracking-wider">Nenhum mês fechado ainda</span>
+                            </div>
+                        )}
+                    </div>
                 </div>
             );
         }
 
         // --- ABA 1: DASHBOARD VIEW ---
-        function DashboardView({ stats, sales, channels, products, compute, filaments = [], selectedMonth }) {
+        function DashboardView({ stats, sales, channels, products, compute, filaments = [], selectedMonth, monthlyClosings = [] }) {
             const findProduct = (id) => products.find(p => p.id === id || (p.externalIds && p.externalIds.includes(id)));
 
             // 5 Produtos mais vendidos no mês selecionado
@@ -2077,7 +2158,7 @@
                     )}
 
                     {/* Seção de Gráficos Financeiros */}
-                    <DashboardChartsView sales={sales} channels={channels} compute={compute} selectedMonth={selectedMonth} />
+                    <DashboardChartsView sales={sales} channels={channels} compute={compute} selectedMonth={selectedMonth} monthlyClosings={monthlyClosings} />
 
                     {/* Gráficos e Detalhes de Canais */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
