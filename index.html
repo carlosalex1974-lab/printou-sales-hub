@@ -1133,7 +1133,7 @@
                         )}
 
                         {activeTab === 'cashflow' && (
-                            <CashflowView accounts={accounts} setAccounts={setAccounts} transactions={transactions} setTransactions={setTransactions} sales={sales} />
+                            <CashflowView accounts={accounts} setAccounts={setAccounts} transactions={transactions} setTransactions={setTransactions} sales={sales} channels={channels} />
                         )}
                     </main>
 
@@ -6321,7 +6321,7 @@
             }
 
             // --- ABA 8.5: CAIXA E BANCOS ---
-            function CashflowView({ accounts = [], setAccounts, transactions = [], setTransactions, sales = [] }) {
+            function CashflowView({ accounts = [], setAccounts, transactions = [], setTransactions, sales = [], channels = [] }) {
                 const [isTransferring, setIsTransferring] = useState(false);
                 const [isAddingTransaction, setIsAddingTransaction] = useState(false);
                 const [transferData, setTransferData] = useState({ amount: '', date: new Date().toISOString().substring(0, 10), from: 'mercado-pago', to: 'caixa-principal' });
@@ -6329,7 +6329,11 @@
 
                 // Calcula os saldos
                 const mlSalesTotal = sales.filter(s => s.status === 'Pago' || s.status === 'Enviado' || s.status === 'Entregue').reduce((acc, sale) => {
-                    const net = (sale.total || 0) - (sale.channelFee || 0) - (sale.shippingCost || 0);
+                    const c = channels.find(ch => ch.id === sale.channelId);
+                    const gross = sale.grossValue || 0;
+                    const fee = c ? (gross * (c.feePercent / 100)) + c.feeFixed : 0;
+                    const shipping = sale.shipping || 0;
+                    const net = gross - fee - shipping;
                     return acc + net;
                 }, 0);
 
