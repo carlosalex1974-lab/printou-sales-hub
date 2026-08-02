@@ -51,6 +51,11 @@ const DEFAULT_DB = {
     sales: [],
     monthlyClosings: [],
     integrationLogs: [],
+    accounts: [
+        { id: 'caixa-principal', name: 'Conta Bancária Principal', type: 'bank' },
+        { id: 'mercado-pago', name: 'Mercado Pago', type: 'wallet' }
+    ],
+    transactions: [],
     credentials: {
         mercadolivre: { clientId: '', clientSecret: '', webhookUrl: 'http://localhost:3001/api/webhooks/mercadolivre', status: 'Não Sincronizado' },
         shopee: { shopId: '', apiKey: '', webhookUrl: 'http://localhost:3001/api/webhooks/shopee', status: 'Não Sincronizado' },
@@ -108,6 +113,14 @@ async function readDb() {
     else db.credentials.facebook.status = 'Nao Sincronizado';
 
     db.monthlyClosings = db.monthlyClosings || [];
+    
+    // Assegurar arrays do módulo de Caixa
+    db.accounts = db.accounts || [
+        { id: 'caixa-principal', name: 'Conta Bancária Principal', type: 'bank' },
+        { id: 'mercado-pago', name: 'Mercado Pago', type: 'wallet' }
+    ];
+    db.transactions = db.transactions || [];
+    
     return db;
 }
 
@@ -129,6 +142,43 @@ app.get('/api/monthly-closings', async (req, res) => {
     } catch (error) {
         console.error("Erro ao ler fechamentos mensais:", error);
         res.status(500).json({ error: "Erro ao ler fechamentos" });
+    }
+});
+
+app.post('/api/expenses', async (req, res) => {
+    try {
+        const { name, category, value, date, isRecurring, accountId } = req.body;
+        if (!name || !category || !value || !date) {
+            return res.status(400).json({ error: "Faltam campos obrigatórios." });
+        }
+        const db = await readDb();
+        
+        const newExpense = {
+            id: Date.now().toString(),
+            name, category, value: parseFloat(value), date,
+            isRecurring: !!isRecurring,
+            accountId: accountId || 'caixa-principal'
+        };
+        
+        db.expenses.unshift(newExpense);
+        
+        // Registrar a transação de saída
+        const newTransaction = {
+            id: Date.now().toString() + '-exp',
+            date: date,
+            description: `Despesa: ${name} (${category})`,
+            type: 'OUT',
+            amount: parseFloat(value),
+            accountId: newExpense.accountId,
+            category: 'Despesa Administrativa'
+        };
+        db.transactions.unshift(newTransaction);
+        
+        await saveDb(db);
+        res.json({ success: true, expense: newExpense });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Erro ao adicionar despesa." });
     }
 });
 
@@ -1083,6 +1133,71 @@ app.post('/api/data/reset', async (req, res) => {
         res.status(500).json({ error: "Erro ao resetar dados do sistema" });
     }
 });
+
+// --- ROTAS DO CAIXA E BANCOS (NOVO) ---
+app.post('/api/transactions', async (req, res) => {
+    try {
+        const { date, description, type, amount, accountId, category } = req.body;
+        if (!date || !description || !type || !amount || !accountId) {
+            return res.status(400).json({ error: "Faltam campos obrigatórios." });
+        }
+        const db = await readDb();
+        
+        const newTransaction = {
+            id: Date.now().toString(),
+            date, description, type, amount: parseFloat(amount), accountId, category: category || 'Outros'
+        };
+        
+        db.transactions.unshift(newTransaction);
+        await saveDb(db);
+        res.json({ success: true, transaction: newTransaction });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Erro ao registrar transação." });
+    }
+});
+
+app.post('/api/transactions/transfer', async (req, res) => {
+    try {
+        const { date, amount, fromAccount, toAccount } = req.body;
+        if (!date || !amount || !fromAccount || !toAccount) {
+            return res.status(400).json({ error: "Faltam campos obrigatórios para transferência." });
+        }
+        const db = await readDb();
+        
+        const timestamp = Date.now().toString();
+        
+        const txOut = {
+            id: timestamp + '-out',
+            date,
+            description: `Transferência enviada para ${db.accounts.find(a => a.id === toAccount)?.name || toAccount}`,
+            type: 'OUT',
+            amount: parseFloat(amount),
+            accountId: fromAccount,
+            category: 'Transferência'
+        };
+        
+        const txIn = {
+            id: timestamp + '-in',
+            date,
+            description: `Transferência recebida de ${db.accounts.find(a => a.id === fromAccount)?.name || fromAccount}`,
+            type: 'IN',
+            amount: parseFloat(amount),
+            accountId: toAccount,
+            category: 'Transferência'
+        };
+        
+        db.transactions.unshift(txOut);
+        db.transactions.unshift(txIn);
+        await saveDb(db);
+        res.json({ success: true });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Erro ao registrar transferência." });
+    }
+});
+
+// --- FIM ROTAS ---
 
 // Endpoint Callback para OAuth 2.0 do Mercado Livre
 app.get('/api/auth/mercadolivre/callback', async (req, res) => {
