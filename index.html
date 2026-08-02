@@ -6331,7 +6331,7 @@
                 const mlSalesTotal = sales.filter(s => s.status === 'Pago' || s.status === 'Enviado' || s.status === 'Entregue').reduce((acc, sale) => {
                     const c = channels.find(ch => ch.id === sale.channelId);
                     const gross = sale.grossValue || 0;
-                    const fee = c ? (gross * (c.feePercent / 100)) + c.feeFixed : 0;
+                    const fee = c ? (gross * ((c.commission || 0) / 100)) + (c.fixedFee || 0) : 0;
                     const shipping = sale.shipping || 0;
                     const net = gross - fee - shipping;
                     return acc + net;
