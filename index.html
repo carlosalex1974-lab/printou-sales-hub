@@ -719,9 +719,11 @@
                 const companyRealNet = totalNet - totalAdmExpenses;
                 const averageMargin = totalGross > 0 ? (totalNet / totalGross) * 100 : 0;
 
+                let totalStockQuantity = 0;
                 const totalStockInvestment = products.reduce((acc, prod) => {
                     const cost = calculateProductCost(prod) || 0;
                     const stockQty = prod.stock || 0;
+                    totalStockQuantity += stockQty;
                     return acc + (cost * stockQty);
                 }, 0);
 
@@ -740,7 +742,8 @@
                     companyRealNet: companyRealNet,
                     breakevenTarget: breakevenSalesValue,
                     breakevenProgress: breakevenProgress,
-                    stockInvestment: totalStockInvestment
+                    stockInvestment: totalStockInvestment,
+                    stockQuantity: totalStockQuantity
                 };
             }, [sales, products, channels, expenses, selectedMonth]);
 
@@ -2034,7 +2037,10 @@
                             </div>
                             <div className="mt-4">
                                 <h3 className="text-xl font-black text-white">R$ {(stats.stockInvestment || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h3>
-                                <span className="text-[9px] text-gray-400">Total em produtos</span>
+                                <div className="flex items-center gap-2 mt-1">
+                                    <span className="text-[10px] font-bold bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full">{stats.stockQuantity || 0} un</span>
+                                    <span className="text-[9px] text-gray-400">Total em produtos</span>
+                                </div>
                             </div>
                         </div>
 
