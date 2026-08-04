@@ -452,9 +452,16 @@
                 }
             };
 
-            // Tenta carregar dados do banco de dados local na inicialização
+            // Tenta carregar dados do banco de dados local na inicialização e inicia auto-refresh
             useEffect(() => {
                 refreshDatabaseData();
+                
+                // Auto-refresh a cada 60 segundos
+                const interval = setInterval(() => {
+                    refreshDatabaseData();
+                }, 60000);
+                
+                return () => clearInterval(interval);
             }, []);
 
             useEffect(() => {
