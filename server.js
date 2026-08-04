@@ -602,6 +602,15 @@ app.post('/api/webhooks/:provider', async (req, res) => {
         if (product) {
             logEntry.message += ` Processando produto: "${product.name}".`;
             
+            // Baixa de estoque físico para todos os produtos
+            if (product.stock !== undefined) {
+                const oldStock = product.stock;
+                product.stock = Math.max(0, product.stock - quantity);
+                if (oldStock !== product.stock) {
+                    deductionLogs.push(`📦 Estoque atualizado: -${quantity} un de "${product.name}" (Restam ${product.stock} un).`);
+                }
+            }
+
             if (product.type === '3d' && product.weight && product.filamentId) {
                 const totalWeight = product.weight * quantity;
                 const filament = db.filaments.find(f => f.id === product.filamentId);
@@ -616,7 +625,7 @@ app.post('/api/webhooks/:provider', async (req, res) => {
                     }
                 }
             } else if (product.type === 'resale') {
-                deductionLogs.push(`📦 Produto de revenda. Baixa automática realizada no sistema.`);
+                deductionLogs.push(`📦 Produto de revenda. Processamento automático de baixa de unidades realizado.`);
             }
         } else {
             // Importar provisoriamente se não existir no catálogo
@@ -1426,6 +1435,21 @@ async function pollMercadoLivreOrders() {
                         filamentId: guessedType === '3d' ? (freshDb.filaments[0]?.id || 'fil1') : undefined
                     };
                     freshDb.products.push(product);
+                }
+
+                // Baixa de estoque físico para todos os produtos
+                if (product.stock !== undefined) {
+                    const oldStock = product.stock;
+                    product.stock = Math.max(0, product.stock - quantity);
+                    if (oldStock !== product.stock) {
+                        freshDb.integrationLogs = freshDb.integrationLogs || [];
+                        freshDb.integrationLogs.push({
+                            id: `log_autosync_stock_${Date.now()}_${Math.random().toString().slice(-3)}`,
+                            timestamp: new Date().toLocaleTimeString('pt-BR'),
+                            type: 'info',
+                            message: `📦 Estoque atualizado: -${quantity} un de "${product.name}" (Restam ${product.stock} un).`
+                        });
+                    }
                 }
 
                 // Baixa de estoque para produtos 3D
