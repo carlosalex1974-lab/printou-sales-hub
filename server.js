@@ -1306,6 +1306,193 @@ app.post('/api/auth/login', async (req, res) => {
     }
 });
 
+// Endpoint para puxar o estoque de filamentos do Mercado Livre (e imagem)
+app.get('/api/sync-ml-stock', async (req, res) => {
+    try {
+        const db = await readDb();
+        
+        const mlCreds = db.credentials?.mercadolivre;
+        const ml2Creds = db.credentials?.mercadolivre2;
+        
+        if (!mlCreds?.accessToken && !ml2Creds?.accessToken) {
+            return res.status(400).json({ error: "Mercado Livre não está conectado." });
+        }
+        
+        let updatedCount = 0;
+        
+        // Puxar estoque apenas para produtos que contenham 'filamento' no nome e que tenham MLB
+        const filamentosParaAtualizar = (db.products || []).filter(p => 
+            p.name && 
+            p.name.toLowerCase().includes('filamento') && 
+            p.externalIds && 
+            p.externalIds.some(id => id.startsWith('MLB'))
+        );
+        
+        for (const prod of filamentosParaAtualizar) {
+            const mlbId = prod.externalIds.find(id => id.startsWith('MLB'));
+            if (!mlbId) continue;
+            
+            // Tentar com as duas credenciais se necessário (simplificado)
+            let accessToken = mlCreds?.accessToken || ml2Creds?.accessToken;
+            
+            try {
+                const response = await fetch(`https://api.mercadolibre.com/items/${mlbId}`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                
+                if (response.ok) {
+                    const itemData = await response.json();
+                    let changed = false;
+                    
+                    if (itemData.available_quantity !== undefined) {
+                        const novoEstoque = parseInt(itemData.available_quantity);
+                        if (prod.stock !== novoEstoque) {
+                            prod.stock = novoEstoque;
+                            changed = true;
+                            console.log(`[SYNC-ML-PULL] Atualizado estoque de "${prod.name}" para ${novoEstoque} un.`);
+                        }
+                    }
+                    
+                    // Puxar também a imagem (thumbnail de alta resolução ou secure_url)
+                    let novaImagem = null;
+                    if (itemData.pictures && itemData.pictures.length > 0) {
+                        novaImagem = itemData.pictures[0].secure_url || itemData.pictures[0].url;
+                    } else if (itemData.secure_thumbnail) {
+                        novaImagem = itemData.secure_thumbnail;
+                    } else if (itemData.thumbnail) {
+                        // Converte thumbnail normal (-I.jpg) para qualidade melhor (-O.jpg)
+                        novaImagem = itemData.thumbnail.replace('-I.jpg', '-O.jpg');
+                    }
+                    
+                    if (novaImagem && prod.image !== novaImagem) {
+                        prod.image = novaImagem;
+                        changed = true;
+                        console.log(`[SYNC-ML-PULL] Atualizada imagem de "${prod.name}".`);
+                    }
+                    
+                    if (changed) {
+                        updatedCount++;
+                    }
+                }
+            } catch (err) {
+                console.error(`[SYNC-ML-PULL] Erro ao consultar ${mlbId}:`, err.message);
+            }
+        }
+        
+        if (updatedCount > 0) {
+            await saveDb(db);
+        }
+        
+        res.json({ success: true, message: `Sincronização concluída! ${updatedCount} filamentos tiveram dados/imagens/estoque atualizados.` });
+    } catch (e) {
+        console.error("[SYNC-ML-PULL] Erro geral:", e);
+        res.status(500).json({ error: "Erro ao sincronizar estoque." });
+    }
+});
+
+// Endpoint para importar catálogo completo do Mercado Livre
+app.get('/api/import-ml-catalog', async (req, res) => {
+    try {
+        const db = await readDb();
+        const mlCreds = db.credentials?.mercadolivre;
+        const ml2Creds = db.credentials?.mercadolivre2;
+        
+        // Pega o token válido mais provável
+        const accessToken = mlCreds?.accessToken || ml2Creds?.accessToken;
+        if (!accessToken) {
+            return res.status(400).json({ error: "Mercado Livre não está conectado." });
+        }
+        
+        // 1. Descobrir o ID do usuário
+        const userRes = await fetch('https://api.mercadolibre.com/users/me', {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        if (!userRes.ok) throw new Error("Falha ao obter ID do usuário");
+        const userData = await userRes.json();
+        const userId = userData.id;
+        
+        // 2. Buscar todos os anúncios ativos do usuário
+        // Fazendo busca paginada simples (puxa até 100 itens)
+        const searchRes = await fetch(`https://api.mercadolibre.com/users/${userId}/items/search?status=active&limit=100`, {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        if (!searchRes.ok) throw new Error("Falha ao buscar anúncios");
+        const searchData = await searchRes.json();
+        
+        const mlbIds = searchData.results || [];
+        if (mlbIds.length === 0) {
+            return res.json({ success: true, message: "Nenhum anúncio ativo encontrado no Mercado Livre." });
+        }
+        
+        // 3. Filtrar quais anúncios JÁ ESTÃO no nosso banco de dados
+        const existingMlbs = new Set();
+        (db.products || []).forEach(p => {
+            if (p.externalIds) {
+                p.externalIds.forEach(id => {
+                    if (id.startsWith('MLB')) existingMlbs.add(id);
+                });
+            }
+        });
+        
+        const newMlbIds = mlbIds.filter(id => !existingMlbs.has(id));
+        if (newMlbIds.length === 0) {
+            return res.json({ success: true, message: "Todos os seus anúncios já estão cadastrados na plataforma." });
+        }
+        
+        // 4. Buscar os detalhes dos anúncios novos e cadastrá-los
+        let importedCount = 0;
+        // A API de /items suporta buscar até 20 IDs separados por vírgula por vez, mas faremos de 1 em 1 para simplificar e garantir imagem em alta
+        for (const mlbId of newMlbIds) {
+            try {
+                const itemRes = await fetch(`https://api.mercadolibre.com/items/${mlbId}`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                if (!itemRes.ok) continue;
+                
+                const itemData = await itemRes.json();
+                
+                let imageUrl = '';
+                if (itemData.pictures && itemData.pictures.length > 0) {
+                    imageUrl = itemData.pictures[0].secure_url || itemData.pictures[0].url;
+                } else if (itemData.secure_thumbnail) {
+                    imageUrl = itemData.secure_thumbnail;
+                } else if (itemData.thumbnail) {
+                    imageUrl = itemData.thumbnail.replace('-I.jpg', '-O.jpg');
+                }
+                
+                const newProduct = {
+                    id: 'p_ml_' + Date.now().toString().slice(-6) + Math.random().toString(36).substr(2, 4),
+                    name: itemData.title,
+                    sku: itemData.seller_custom_field || mlbId,
+                    type: 'resale', // Padrão
+                    stock: itemData.available_quantity ? parseInt(itemData.available_quantity) : 0,
+                    alertThreshold: 3,
+                    acquisitionCost: 0.00,
+                    price: parseFloat(itemData.price) || 0.00,
+                    supplierId: '',
+                    image: imageUrl,
+                    externalIds: [mlbId]
+                };
+                
+                if (!db.products) db.products = [];
+                db.products.push(newProduct);
+                importedCount++;
+            } catch (err) {
+                console.error(`[IMPORT ML] Erro ao importar ${mlbId}:`, err.message);
+            }
+        }
+        
+        if (importedCount > 0) {
+            await saveDb(db);
+        }
+        
+        res.json({ success: true, message: `Catálogo importado! ${importedCount} novos produtos foram cadastrados no Estoque.` });
+    } catch (e) {
+        console.error("[IMPORT ML] Erro geral:", e);
+        res.status(500).json({ error: "Erro ao importar catálogo do Mercado Livre." });
+    }
+});
+
 // Rota de fallback para entregar o React App (Single Page Application)
 app.use((req, res) => {
     res.sendFile(path.join(__dirname, 'dist', 'index.html'));
@@ -1550,192 +1737,6 @@ async function pollCancelledOrders() {
         console.error('[AUTO-SYNC] Erro ao verificar cancelamentos:', err.message);
     }
 }
-
-// Endpoint para puxar o estoque de filamentos do Mercado Livre (e imagem)
-app.get('/api/sync-ml-stock', async (req, res) => {
-    try {
-        const db = await readDb();
-        
-        const mlCreds = db.credentials?.mercadolivre;
-        const ml2Creds = db.credentials?.mercadolivre2;
-        
-        if (!mlCreds?.accessToken && !ml2Creds?.accessToken) {
-            return res.status(400).json({ error: "Mercado Livre não está conectado." });
-        }
-        
-        let updatedCount = 0;
-        
-        // Puxar estoque apenas para produtos que contenham 'filamento' no nome e que tenham MLB
-        const filamentosParaAtualizar = db.products.filter(p => 
-            p.name && 
-            p.name.toLowerCase().includes('filamento') && 
-            p.externalIds && 
-            p.externalIds.some(id => id.startsWith('MLB'))
-        );
-        
-        for (const prod of filamentosParaAtualizar) {
-            const mlbId = prod.externalIds.find(id => id.startsWith('MLB'));
-            if (!mlbId) continue;
-            
-            // Tentar com as duas credenciais se necessário (simplificado)
-            let accessToken = mlCreds?.accessToken || ml2Creds?.accessToken;
-            
-            try {
-                const response = await fetch(`https://api.mercadolibre.com/items/${mlbId}`, {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
-                });
-                
-                if (response.ok) {
-                    const itemData = await response.json();
-                    let changed = false;
-                    
-                    if (itemData.available_quantity !== undefined) {
-                        const novoEstoque = parseInt(itemData.available_quantity);
-                        if (prod.stock !== novoEstoque) {
-                            prod.stock = novoEstoque;
-                            changed = true;
-                            console.log(`[SYNC-ML-PULL] Atualizado estoque de "${prod.name}" para ${novoEstoque} un.`);
-                        }
-                    }
-                    
-                    // Puxar também a imagem (thumbnail de alta resolução ou secure_url)
-                    let novaImagem = null;
-                    if (itemData.pictures && itemData.pictures.length > 0) {
-                        novaImagem = itemData.pictures[0].secure_url || itemData.pictures[0].url;
-                    } else if (itemData.secure_thumbnail) {
-                        novaImagem = itemData.secure_thumbnail;
-                    } else if (itemData.thumbnail) {
-                        // Converte thumbnail normal (-I.jpg) para qualidade melhor (-O.jpg)
-                        novaImagem = itemData.thumbnail.replace('-I.jpg', '-O.jpg');
-                    }
-                    
-                    if (novaImagem && prod.image !== novaImagem) {
-                        prod.image = novaImagem;
-                        changed = true;
-                        console.log(`[SYNC-ML-PULL] Atualizada imagem de "${prod.name}".`);
-                    }
-                    
-                    if (changed) {
-                        updatedCount++;
-                    }
-                }
-            } catch (err) {
-                console.error(`[SYNC-ML-PULL] Erro ao consultar ${mlbId}:`, err.message);
-            }
-        }
-        
-        if (updatedCount > 0) {
-            await saveDb(db);
-        }
-        
-        res.json({ success: true, message: `Sincronização concluída! ${updatedCount} filamentos tiveram dados/imagens/estoque atualizados.` });
-    } catch (e) {
-        console.error("[SYNC-ML-PULL] Erro geral:", e);
-        res.status(500).json({ error: "Erro ao sincronizar estoque." });
-    }
-});
-
-// Endpoint para importar catálogo completo do Mercado Livre
-app.get('/api/import-ml-catalog', async (req, res) => {
-    try {
-        const db = await readDb();
-        const mlCreds = db.credentials?.mercadolivre;
-        const ml2Creds = db.credentials?.mercadolivre2;
-        
-        // Pega o token válido mais provável
-        const accessToken = mlCreds?.accessToken || ml2Creds?.accessToken;
-        if (!accessToken) {
-            return res.status(400).json({ error: "Mercado Livre não está conectado." });
-        }
-        
-        // 1. Descobrir o ID do usuário
-        const userRes = await fetch('https://api.mercadolibre.com/users/me', {
-            headers: { 'Authorization': `Bearer ${accessToken}` }
-        });
-        if (!userRes.ok) throw new Error("Falha ao obter ID do usuário");
-        const userData = await userRes.json();
-        const userId = userData.id;
-        
-        // 2. Buscar todos os anúncios ativos do usuário
-        // Fazendo busca paginada simples (puxa até 100 itens)
-        const searchRes = await fetch(`https://api.mercadolibre.com/users/${userId}/items/search?status=active&limit=100`, {
-            headers: { 'Authorization': `Bearer ${accessToken}` }
-        });
-        if (!searchRes.ok) throw new Error("Falha ao buscar anúncios");
-        const searchData = await searchRes.json();
-        
-        const mlbIds = searchData.results || [];
-        if (mlbIds.length === 0) {
-            return res.json({ success: true, message: "Nenhum anúncio ativo encontrado no Mercado Livre." });
-        }
-        
-        // 3. Filtrar quais anúncios JÁ ESTÃO no nosso banco de dados
-        const existingMlbs = new Set();
-        db.products.forEach(p => {
-            if (p.externalIds) {
-                p.externalIds.forEach(id => {
-                    if (id.startsWith('MLB')) existingMlbs.add(id);
-                });
-            }
-        });
-        
-        const newMlbIds = mlbIds.filter(id => !existingMlbs.has(id));
-        if (newMlbIds.length === 0) {
-            return res.json({ success: true, message: "Todos os seus anúncios já estão cadastrados na plataforma." });
-        }
-        
-        // 4. Buscar os detalhes dos anúncios novos e cadastrá-los
-        let importedCount = 0;
-        // A API de /items suporta buscar até 20 IDs separados por vírgula por vez, mas faremos de 1 em 1 para simplificar e garantir imagem em alta
-        for (const mlbId of newMlbIds) {
-            try {
-                const itemRes = await fetch(`https://api.mercadolibre.com/items/${mlbId}`, {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
-                });
-                if (!itemRes.ok) continue;
-                
-                const itemData = await itemRes.json();
-                
-                let imageUrl = '';
-                if (itemData.pictures && itemData.pictures.length > 0) {
-                    imageUrl = itemData.pictures[0].secure_url || itemData.pictures[0].url;
-                } else if (itemData.secure_thumbnail) {
-                    imageUrl = itemData.secure_thumbnail;
-                } else if (itemData.thumbnail) {
-                    imageUrl = itemData.thumbnail.replace('-I.jpg', '-O.jpg');
-                }
-                
-                const newProduct = {
-                    id: 'p_ml_' + Date.now().toString().slice(-6) + Math.random().toString(36).substr(2, 4),
-                    name: itemData.title,
-                    sku: itemData.seller_custom_field || mlbId,
-                    type: 'resale', // Padrão
-                    stock: itemData.available_quantity ? parseInt(itemData.available_quantity) : 0,
-                    alertThreshold: 3,
-                    acquisitionCost: 0.00,
-                    price: parseFloat(itemData.price) || 0.00,
-                    supplierId: '',
-                    image: imageUrl,
-                    externalIds: [mlbId]
-                };
-                
-                db.products.push(newProduct);
-                importedCount++;
-            } catch (err) {
-                console.error(`[IMPORT ML] Erro ao importar ${mlbId}:`, err.message);
-            }
-        }
-        
-        if (importedCount > 0) {
-            await saveDb(db);
-        }
-        
-        res.json({ success: true, message: `Catálogo importado! ${importedCount} novos produtos foram cadastrados no Estoque.` });
-    } catch (e) {
-        console.error("[IMPORT ML] Erro geral:", e);
-        res.status(500).json({ error: "Erro ao importar catálogo do Mercado Livre." });
-    }
-});
 
 app.listen(PORT, () => {
     console.log(`\n======================================================`);
