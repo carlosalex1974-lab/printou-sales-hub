@@ -382,67 +382,59 @@
                         const localExpenses = localExpensesRaw ? JSON.parse(localExpensesRaw) : [];
                         const localFilaments = localFilamentsRaw ? JSON.parse(localFilamentsRaw) : [];
                         
-                        // Função auxiliar para mesclar listas baseado no ID único
-                        const mergeLists = (serverList = [], localList = []) => {
-                            const map = new Map();
-                            // Adiciona itens do servidor primeiro
-                            serverList.forEach(item => { if (item && item.id) map.set(item.id, item); });
-                            // Adiciona ou mescla itens locais (mantendo locais se não existirem no servidor)
-                            localList.forEach(item => {
-                                if (item && item.id) {
-                                    if (!map.has(item.id)) {
-                                        map.set(item.id, item);
-                                    } else {
-                                        // Se o item existe em ambos, mescla preferindo valores não vazios
-                                        map.set(item.id, { ...map.get(item.id), ...item });
-                                    }
-                                }
-                            });
-                            return Array.from(map.values());
-                        };
-
-                        const mergedSales = mergeLists(serverData.sales, localSales);
-                        const mergedProducts = mergeLists(serverData.products, localProducts);
-                        const mergedChannels = mergeLists(serverData.channels, localChannels);
-                        const mergedSuppliers = mergeLists(serverData.suppliers, localSuppliers);
-                        const mergedExpenses = mergeLists(serverData.expenses || [], localExpenses);
-                        const mergedFilaments = mergeLists(serverData.filaments || [], localFilaments);
+                        // Detecta se o servidor (Render) sofreu um reset (disco efêmero)
+                        // Considera reset se o servidor não tem produtos, mas o local tem.
+                        const isServerReset = (!serverData.products || serverData.products.length === 0) && localProducts.length > 0;
                         
-                        setSales(mergedSales);
-                        setProducts(mergedProducts);
-                        setChannels(mergedChannels.length > 0 ? mergedChannels : serverData.channels);
-                        setSuppliers(mergedSuppliers);
-                        setExpenses(mergedExpenses);
-                        setFilaments(mergedFilaments);
+                        let finalSales, finalProducts, finalChannels, finalSuppliers, finalExpenses, finalFilaments;
+
+                        if (isServerReset) {
+                            console.log("[Auto-Healing] Servidor parece ter resetado. Restaurando dados do LocalStorage...");
+                            finalSales = localSales;
+                            finalProducts = localProducts;
+                            finalChannels = localChannels;
+                            finalSuppliers = localSuppliers;
+                            finalExpenses = localExpenses;
+                            finalFilaments = localFilaments;
+                            
+                            // Dispara restauração para o servidor
+                            const updatedPayload = {
+                                ...serverData,
+                                sales: finalSales,
+                                products: finalProducts,
+                                filaments: finalFilaments,
+                                expenses: finalExpenses,
+                                suppliers: finalSuppliers,
+                                channels: finalChannels
+                            };
+                            fetch('/api/data', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(updatedPayload)
+                            }).catch(console.error);
+                        } else {
+                            // Se o servidor tem dados, o SERVIDOR É A FONTE DA VERDADE. Não mesclar com local stale!
+                            finalSales = serverData.sales || [];
+                            finalProducts = serverData.products || [];
+                            finalChannels = serverData.channels || [];
+                            finalSuppliers = serverData.suppliers || [];
+                            finalExpenses = serverData.expenses || [];
+                            finalFilaments = serverData.filaments || [];
+                        }
+                        
+                        setSales(finalSales);
+                        setProducts(finalProducts);
+                        setChannels(finalChannels);
+                        setSuppliers(finalSuppliers);
+                        setExpenses(finalExpenses);
+                        setFilaments(finalFilaments);
+                        
                         if (serverData.monthlyClosings) setMonthlyClosings(serverData.monthlyClosings);
                         if (serverData.accounts) setAccounts(serverData.accounts);
                         if (serverData.transactions) setTransactions(serverData.transactions);
                         if (serverData.integrationLogs) setIntegrationLogs(serverData.integrationLogs);
                         if (serverData.credentials) setCredentials(serverData.credentials);
 
-                        // Se os dados mesclados têm mais itens do que o servidor retornou, restaura o servidor de forma assíncrona
-                        const serverNeedsUpdate = 
-                            mergedSales.length > (serverData.sales || []).length ||
-                            mergedProducts.length > (serverData.products || []).length ||
-                            mergedFilaments.length > (serverData.filaments || []).length ||
-                            mergedExpenses.length > (serverData.expenses || []).length;
-                            
-                        if (serverNeedsUpdate) {
-                            console.log("[Auto-Healing] Sincronizando dados locais salvos com o servidor recém-iniciado...");
-                            const updatedPayload = {
-                                ...serverData,
-                                sales: mergedSales,
-                                products: mergedProducts,
-                                filaments: mergedFilaments,
-                                expenses: mergedExpenses,
-                                suppliers: mergedSuppliers
-                            };
-                            await fetch('/api/data', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify(updatedPayload)
-                            });
-                        }
                         hasLoadedFromServer.current = true;
                     }
                 } catch (error) {
@@ -5855,25 +5847,25 @@
             const handleAdjustStock = (id, newStock) => {
                 const val = parseInt(newStock);
                 if (!isNaN(val) && val >= 0) {
-                    const prod = products.find(p => p.id === id);
-                    if (prod) {
-                        const oldStock = prod.stock || 0;
+                    const prodInfo = products.find(p => p.id === id);
+                    if (prodInfo) {
+                        const oldStock = prodInfo.stock || 0;
                         if (oldStock === val) return;
-                        
-                        setProducts(products.map(p => p.id === id ? { ...p, stock: val } : p));
-                        
+
                         // Registrar a movimentação
                         const diff = val - oldStock;
                         const movement = {
                             id: 'mov-' + Date.now() + Math.random().toString(36).substr(2, 4),
                             timestamp: new Date().toISOString(),
                             type: diff > 0 ? 'entrada' : 'saida',
-                            itemName: prod.name,
+                            itemName: prodInfo.name,
                             qty: Math.abs(diff),
                             unit: 'un',
                             reason: `Ajuste rápido (de ${oldStock} para ${val})`
                         };
                         setStockMovements(prev => [movement, ...prev]);
+
+                        setProducts(prevProds => prevProds.map(p => p.id === id ? { ...p, stock: val } : p));
                     }
                 }
             };
@@ -6141,10 +6133,16 @@
                                                     </td>
                                                     <td className="py-4 px-6 text-center">
                                                         <input 
+                                                            key={`${prod.id}-${prod.stock || 0}`}
                                                             type="number"
                                                             defaultValue={prod.stock || 0}
                                                             onBlur={(e) => handleAdjustStock(prod.id, e.target.value)}
-                                                            onKeyDown={(e) => e.key === 'Enter' && handleAdjustStock(prod.id, e.target.value)}
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === 'Enter') {
+                                                                    handleAdjustStock(prod.id, e.target.value);
+                                                                    e.target.blur();
+                                                                }
+                                                            }}
                                                             className="w-16 bg-[#16161A] border border-white/5 text-white rounded-lg p-1.5 text-center text-xs font-extrabold focus:outline-none focus:border-brand-orange"
                                                         />
                                                     </td>

@@ -233,6 +233,49 @@ app.get('/api/data', async (req, res) => {
     }
 });
 
+// Função para sincronizar estoque com o Mercado Livre
+async function syncStockToML(db, product, newStock) {
+    if (!product.externalIds || !Array.isArray(product.externalIds)) return;
+    
+    const mlCreds = db.credentials?.mercadolivre;
+    const ml2Creds = db.credentials?.mercadolivre2;
+    
+    for (const extId of product.externalIds) {
+        if (!extId.startsWith('MLB')) continue;
+        
+        let accessToken = mlCreds?.accessToken;
+        if (!accessToken && ml2Creds?.accessToken) accessToken = ml2Creds.accessToken;
+        
+        if (!accessToken) continue;
+        
+        try {
+            // Se estoque for <= 0, pausa o anúncio. Senão, atualiza a quantidade.
+            const body = newStock <= 0 
+                ? { status: 'paused' } 
+                : { available_quantity: newStock };
+                
+            const res = await fetch(`https://api.mercadolibre.com/items/${extId}`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify(body)
+            });
+            
+            if (!res.ok) {
+                const errData = await res.text();
+                console.warn(`[ML SYNC] Erro ao sincronizar estoque do item ${extId}:`, errData);
+            } else {
+                console.log(`[ML SYNC] Sucesso: Item ${extId} atualizado com base no novo estoque de ${newStock} un.`);
+            }
+        } catch (e) {
+            console.error(`[ML SYNC] Erro na requisição para ${extId}:`, e);
+        }
+    }
+}
+
 // Endpoint para salvar dados
 app.post('/api/data', async (req, res) => {
     try {
@@ -323,6 +366,19 @@ app.post('/api/data', async (req, res) => {
                             return res.status(400).json({ error: `Operação inválida: A despesa #${exp.id} pertence a um mês fechado (${expMonth}) e não pode ser modificada.` });
                         }
                     }
+                }
+            }
+        }
+
+        // Sincronizar estoque manual com Mercado Livre
+        if (newData.products && Array.isArray(newData.products) && currentData.products) {
+            for (const newProd of newData.products) {
+                const oldProd = currentData.products.find(p => p.id === newProd.id);
+                if (oldProd && oldProd.stock !== newProd.stock) {
+                    const latestStock = newProd.stock || 0;
+                    console.log(`[SYNC] Detectada mudança de estoque manual para "${newProd.name}": de ${oldProd.stock} para ${latestStock}. Iniciando sync com ML.`);
+                    // Fire and forget (não bloqueia a resposta)
+                    syncStockToML({ credentials: mergedCredentials }, newProd, latestStock).catch(console.error);
                 }
             }
         }
@@ -608,6 +664,7 @@ app.post('/api/webhooks/:provider', async (req, res) => {
                 product.stock = Math.max(0, product.stock - quantity);
                 if (oldStock !== product.stock) {
                     deductionLogs.push(`📦 Estoque atualizado: -${quantity} un de "${product.name}" (Restam ${product.stock} un).`);
+                    syncStockToML(db, product, product.stock).catch(console.error);
                 }
             }
 
