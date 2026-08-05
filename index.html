@@ -2883,6 +2883,28 @@
             const activeForm = editingProduct || newProduct;
             const isEditing = !!editingProduct;
 
+            const handleImportCatalog = async () => {
+                try {
+                    const btn = document.getElementById('btn-import-catalog-prod');
+                    if (btn) btn.innerHTML = '⏳ Importando (Aguarde)...';
+                    
+                    const res = await fetch('/api/import-ml-catalog');
+                    const data = await res.json();
+                    
+                    if (data.success) {
+                        alert(data.message);
+                        window.location.reload();
+                    } else {
+                        alert('Erro ao importar catálogo: ' + data.error);
+                        if (btn) btn.innerHTML = '📥 Importar Catálogo (ML)';
+                    }
+                } catch (e) {
+                    alert('Erro de conexão com o servidor ao importar.');
+                    const btn = document.getElementById('btn-import-catalog-prod');
+                    if (btn) btn.innerHTML = '📥 Importar Catálogo (ML)';
+                }
+            };
+
             return (
                 <div className="space-y-8 animate-fade-in">
                     {/* Header da Aba */}
@@ -2891,18 +2913,27 @@
                             <span className="text-xs font-bold tracking-widest text-brand-orange uppercase">Engenharia de Produto</span>
                             <h3 className="font-black text-2xl text-gradient">Produtos & Custos</h3>
                         </div>
-                        <button 
-                            onClick={() => {
-                                if (isEditing) {
-                                    setEditingProduct(null);
-                                }
-                                setIsAdding(!isAdding);
-                            }}
-                            className="bg-brand-orange/10 border border-brand-orange/40 hover:bg-brand-orange/20 text-brand-orange px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all"
-                        >
-                            <i data-lucide={isAdding ? "minus" : "plus"} className="w-4 h-4"></i>
-                            {isAdding ? "Fechar Painel" : "Cadastrar Novo Item"}
-                        </button>
+                        <div className="flex gap-2">
+                            <button 
+                                id="btn-import-catalog-prod"
+                                onClick={handleImportCatalog}
+                                className="bg-purple-600 hover:bg-purple-500 text-white font-extrabold px-4 py-2.5 rounded-xl transition-all shadow-lg text-xs tracking-wider flex items-center gap-2"
+                            >
+                                📥 Importar Catálogo (ML)
+                            </button>
+                            <button 
+                                onClick={() => {
+                                    if (isEditing) {
+                                        setEditingProduct(null);
+                                    }
+                                    setIsAdding(!isAdding);
+                                }}
+                                className="bg-brand-orange/10 border border-brand-orange/40 hover:bg-brand-orange/20 text-brand-orange px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all"
+                            >
+                                <i data-lucide={isAdding ? "minus" : "plus"} className="w-4 h-4"></i>
+                                {isAdding ? "Fechar Painel" : "Cadastrar Novo Item"}
+                            </button>
+                        </div>
                     </div>
 
                     {/* Barra de Pesquisa */}
@@ -5911,27 +5942,6 @@
                 }
             };
 
-            const handleImportCatalog = async () => {
-                try {
-                    const btn = document.getElementById('btn-import-catalog');
-                    if (btn) btn.innerHTML = '⏳ Importando (Aguarde)...';
-                    
-                    const res = await fetch('/api/import-ml-catalog');
-                    const data = await res.json();
-                    
-                    if (data.success) {
-                        alert(data.message);
-                        window.location.reload();
-                    } else {
-                        alert('Erro ao importar catálogo: ' + data.error);
-                        if (btn) btn.innerHTML = '📥 Importar Catálogo do ML';
-                    }
-                } catch (e) {
-                    alert('Erro de conexão com o servidor ao importar.');
-                    const btn = document.getElementById('btn-import-catalog');
-                    if (btn) btn.innerHTML = '📥 Importar Catálogo do ML';
-                }
-            };
 
             return (
                 <div className="space-y-6">
@@ -5951,13 +5961,6 @@
                                     <span className="block text-[10px] font-bold text-brand-orange uppercase tracking-widest">Valor Investido</span>
                                     <span className="text-sm font-black text-brand-orange">R$ {totalInvested.toFixed(2)}</span>
                                 </div>
-                                <button 
-                                    id="btn-import-catalog"
-                                    onClick={handleImportCatalog}
-                                    className="bg-purple-600 hover:bg-purple-500 text-white font-extrabold px-4 py-3 rounded-xl transition-all shadow-lg text-xs tracking-wider flex items-center gap-2"
-                                >
-                                    📥 Importar Catálogo do ML
-                                </button>
                                 <button 
                                     id="btn-pull-ml"
                                     onClick={handlePullStock}
