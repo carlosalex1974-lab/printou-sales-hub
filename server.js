@@ -1407,7 +1407,10 @@ app.get('/api/import-ml-catalog', async (req, res) => {
         const userRes = await fetch('https://api.mercadolibre.com/users/me', {
             headers: { 'Authorization': `Bearer ${accessToken}` }
         });
-        if (!userRes.ok) throw new Error("Falha ao obter ID do usuário");
+        if (!userRes.ok) {
+            const errText = await userRes.text();
+            throw new Error(`Falha API ML (users/me): Status ${userRes.status} - ${errText}`);
+        }
         const userData = await userRes.json();
         const userId = userData.id;
         
@@ -1416,7 +1419,10 @@ app.get('/api/import-ml-catalog', async (req, res) => {
         const searchRes = await fetch(`https://api.mercadolibre.com/users/${userId}/items/search?status=active&limit=100`, {
             headers: { 'Authorization': `Bearer ${accessToken}` }
         });
-        if (!searchRes.ok) throw new Error("Falha ao buscar anúncios");
+        if (!searchRes.ok) {
+            const errText = await searchRes.text();
+            throw new Error(`Falha API ML (items/search): Status ${searchRes.status} - ${errText}`);
+        }
         const searchData = await searchRes.json();
         
         const mlbIds = searchData.results || [];
@@ -1489,7 +1495,7 @@ app.get('/api/import-ml-catalog', async (req, res) => {
         res.json({ success: true, message: `Catálogo importado! ${importedCount} novos produtos foram cadastrados no Estoque.` });
     } catch (e) {
         console.error("[IMPORT ML] Erro geral:", e);
-        res.status(500).json({ error: "Erro ao importar catálogo do Mercado Livre." });
+        res.status(500).json({ error: e.message || "Erro ao importar catálogo do Mercado Livre." });
     }
 });
 
