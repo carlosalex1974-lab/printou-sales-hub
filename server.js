@@ -1311,11 +1311,9 @@ app.get('/api/sync-ml-stock', async (req, res) => {
     try {
         const db = await readDb();
         
-        const mlCreds = db.credentials?.mercadolivre;
-        const ml2Creds = db.credentials?.mercadolivre2;
-        
-        if (!mlCreds?.accessToken && !ml2Creds?.accessToken) {
-            return res.status(400).json({ error: "Mercado Livre não está conectado." });
+        const accessToken = (await getValidAccessToken('mercadolivre', db)) || (await getValidAccessToken('mercadolivre2', db));
+        if (!accessToken) {
+            return res.status(400).json({ error: "Mercado Livre não está conectado ou a autorização expirou. Por favor, reconecte na aba Integrações." });
         }
         
         let updatedCount = 0;
@@ -1332,8 +1330,6 @@ app.get('/api/sync-ml-stock', async (req, res) => {
             const mlbId = prod.externalIds.find(id => id.startsWith('MLB'));
             if (!mlbId) continue;
             
-            // Tentar com as duas credenciais se necessário (simplificado)
-            let accessToken = mlCreds?.accessToken || ml2Creds?.accessToken;
             
             try {
                 const response = await fetch(`https://api.mercadolibre.com/items/${mlbId}`, {
@@ -1394,13 +1390,10 @@ app.get('/api/sync-ml-stock', async (req, res) => {
 app.get('/api/import-ml-catalog', async (req, res) => {
     try {
         const db = await readDb();
-        const mlCreds = db.credentials?.mercadolivre;
-        const ml2Creds = db.credentials?.mercadolivre2;
-        
-        // Pega o token válido mais provável
-        const accessToken = mlCreds?.accessToken || ml2Creds?.accessToken;
+        // Pega o token válido mais provável (já com auto-refresh)
+        const accessToken = (await getValidAccessToken('mercadolivre', db)) || (await getValidAccessToken('mercadolivre2', db));
         if (!accessToken) {
-            return res.status(400).json({ error: "Mercado Livre não está conectado." });
+            return res.status(400).json({ error: "Mercado Livre não está conectado ou a autorização expirou. Por favor, reconecte na aba Integrações." });
         }
         
         // 1. Descobrir o ID do usuário
