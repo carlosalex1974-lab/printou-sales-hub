@@ -1407,40 +1407,22 @@ app.get('/api/import-ml-catalog', async (req, res) => {
         const userData = await userRes.json();
         const userId = userData.id;
         
-        // 2. Buscar TODOS os anúncios ativos do usuário usando a API Pública de Busca (evita bloqueios de segurança)
-        let mlbIds = [];
-        let offset = 0;
-        const limit = 50;
-        let hasMore = true;
-        
-        while (hasMore) {
-            const url = `https://api.mercadolibre.com/sites/MLB/search?seller_id=${userId}&status=active&limit=${limit}&offset=${offset}`;
-            
-            // Removemos o cabeçalho Authorization porque a busca pública do ML aciona o PolicyAgent
-            // bloqueando paginação de apps não certificados, e como é uma busca pública, o token não é necessário.
-            const searchRes = await fetch(url);
-            
-            if (!searchRes.ok) {
-                const errText = await searchRes.text();
-                throw new Error(`Falha API ML (sites/MLB/search): Status ${searchRes.status} - ${errText}`);
-            }
-            const searchData = await searchRes.json();
-            
-            const results = searchData.results || [];
-            if (results.length > 0) {
-                // A API pública retorna um array de objetos, não apenas os IDs. Mapear para pegar apenas o .id
-                mlbIds = mlbIds.concat(results.map(r => r.id));
-            }
-            
-            if (results.length < limit || offset >= 1000) { // Safety break
-                hasMore = false;
-            } else {
-                offset += limit;
-            }
+        // 2. Buscar os anúncios do usuário (Ativos e Pausados) para garantir que puxamos o máximo possível
+        // Limite máximo sem paginação bloqueada é 100
+        const searchRes = await fetch(`https://api.mercadolibre.com/users/${userId}/items/search?limit=100`, {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        if (!searchRes.ok) {
+            const errText = await searchRes.text();
+            throw new Error(`Falha API ML (items/search): Status ${searchRes.status} - ${errText}`);
         }
+        const searchData = await searchRes.json();
+        
+        const totalItemsOnML = searchData.paging?.total || 0;
+        const mlbIds = searchData.results || [];
         
         if (mlbIds.length === 0) {
-            return res.json({ success: true, message: "Nenhum anúncio ativo encontrado no Mercado Livre." });
+            return res.json({ success: true, message: "Nenhum anúncio encontrado no Mercado Livre." });
         }
         
         // 3. Filtrar quais anúncios JÁ ESTÃO no nosso banco de dados
@@ -1505,7 +1487,9 @@ app.get('/api/import-ml-catalog', async (req, res) => {
             await saveDb(db);
         }
         
-        res.json({ success: true, message: `Catálogo importado! ${importedCount} novos produtos foram cadastrados no Estoque.` });
+        const warningMsg = totalItemsOnML > 100 ? ` (Nota: O Mercado Livre limitou a leitura aos primeiros 100 anúncios de um total de ${totalItemsOnML}).` : ` (De um total de ${totalItemsOnML} anúncios na conta).`;
+        
+        res.json({ success: true, message: `Catálogo importado! ${importedCount} novos produtos foram cadastrados no Estoque.` + warningMsg });
     } catch (e) {
         console.error("[IMPORT ML] Erro geral:", e);
         res.status(500).json({ error: e.message || "Erro ao importar catálogo do Mercado Livre." });
