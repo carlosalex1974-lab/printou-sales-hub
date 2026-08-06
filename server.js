@@ -1589,6 +1589,9 @@ app.post('/api/import-ml-catalog-from-list', async (req, res) => {
             if (p.externalIds) p.externalIds.forEach(id => {
                 if (id.startsWith('MLB')) existingMlbs.add(id);
             });
+            if (p.id && p.id.startsWith('MLB')) {
+                existingMlbs.add(p.id);
+            }
         });
 
         // Limpa e extrai os IDs corretamente da lista (remove espaços, garante prefixo MLB)
@@ -1596,50 +1599,65 @@ app.post('/api/import-ml-catalog-from-list', async (req, res) => {
             .map(id => id.trim().toUpperCase())
             .filter(id => id.startsWith('MLB'));
 
-        const newMlbIds = cleanedMlbIds.filter(id => !existingMlbs.has(id));
+        const newMlbIds = [...new Set(cleanedMlbIds)].filter(id => !existingMlbs.has(id));
         
         if (newMlbIds.length === 0) {
             return res.json({ success: true, message: "Todos os códigos fornecidos já estão cadastrados na plataforma." });
         }
 
         let importedCount = 0;
-        for (const mlbId of newMlbIds) {
+        
+        const chunkSize = 20;
+        for (let i = 0; i < newMlbIds.length; i += chunkSize) {
+            const chunk = newMlbIds.slice(i, i + chunkSize);
+            const idsStr = chunk.join(',');
+
             try {
-                const itemRes = await fetch(`https://api.mercadolibre.com/items/${mlbId}`, {
+                const itemRes = await fetch(`https://api.mercadolibre.com/items?ids=${idsStr}&attributes=id,title,price,available_quantity,pictures,seller_custom_field,thumbnail,secure_thumbnail`, {
                     headers: { 'Authorization': `Bearer ${accessToken}` }
                 });
-                if (!itemRes.ok) continue;
                 
-                const itemData = await itemRes.json();
-                
-                let imageUrl = '';
-                if (itemData.pictures && itemData.pictures.length > 0) {
-                    imageUrl = itemData.pictures[0].secure_url || itemData.pictures[0].url;
-                } else if (itemData.secure_thumbnail) {
-                    imageUrl = itemData.secure_thumbnail;
-                } else if (itemData.thumbnail) {
-                    imageUrl = itemData.thumbnail.replace('-I.jpg', '-O.jpg');
+                if (!itemRes.ok) {
+                    console.error(`[IMPORT ML LIST] Erro no lote ${idsStr}:`, await itemRes.text());
+                    continue;
                 }
                 
-                const newProduct = {
-                    id: 'p_ml_' + Date.now().toString().slice(-6) + Math.random().toString(36).substr(2, 4),
-                    name: itemData.title,
-                    sku: itemData.seller_custom_field || mlbId,
-                    type: 'resale',
-                    stock: itemData.available_quantity ? parseInt(itemData.available_quantity) : 0,
-                    alertThreshold: 3,
-                    acquisitionCost: 0.00,
-                    price: parseFloat(itemData.price) || 0.00,
-                    supplierId: '',
-                    image: imageUrl,
-                    externalIds: [mlbId]
-                };
+                const responseData = await itemRes.json();
                 
-                if (!db.products) db.products = [];
-                db.products.push(newProduct);
-                importedCount++;
+                for (const itemObj of responseData) {
+                    if (itemObj.code !== 200) continue;
+                    const itemData = itemObj.body;
+                    const mlbId = itemData.id;
+                    
+                    let imageUrl = '';
+                    if (itemData.pictures && itemData.pictures.length > 0) {
+                        imageUrl = itemData.pictures[0].secure_url || itemData.pictures[0].url;
+                    } else if (itemData.secure_thumbnail) {
+                        imageUrl = itemData.secure_thumbnail;
+                    } else if (itemData.thumbnail) {
+                        imageUrl = itemData.thumbnail.replace('-I.jpg', '-O.jpg');
+                    }
+                    
+                    const newProduct = {
+                        id: 'p_ml_' + Date.now().toString().slice(-6) + Math.random().toString(36).substr(2, 4),
+                        name: itemData.title,
+                        sku: itemData.seller_custom_field || mlbId,
+                        type: 'resale',
+                        stock: itemData.available_quantity ? parseInt(itemData.available_quantity) : 0,
+                        alertThreshold: 3,
+                        acquisitionCost: 0.00,
+                        price: parseFloat(itemData.price) || 0.00,
+                        supplierId: '',
+                        image: imageUrl,
+                        externalIds: [mlbId]
+                    };
+                    
+                    if (!db.products) db.products = [];
+                    db.products.push(newProduct);
+                    importedCount++;
+                }
             } catch (err) {
-                console.error(`[IMPORT ML LIST] Erro ao importar ${mlbId}:`, err.message);
+                console.error("[IMPORT ML LIST] Erro fatal no lote:", err.message);
             }
         }
 
