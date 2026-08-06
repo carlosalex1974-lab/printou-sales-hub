@@ -1416,9 +1416,9 @@ app.get('/api/import-ml-catalog', async (req, res) => {
         while (hasMore) {
             const url = `https://api.mercadolibre.com/sites/MLB/search?seller_id=${userId}&status=active&limit=${limit}&offset=${offset}`;
             
-            const searchRes = await fetch(url, {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
-            });
+            // Removemos o cabeçalho Authorization porque a busca pública do ML aciona o PolicyAgent
+            // bloqueando paginação de apps não certificados, e como é uma busca pública, o token não é necessário.
+            const searchRes = await fetch(url);
             
             if (!searchRes.ok) {
                 const errText = await searchRes.text();
