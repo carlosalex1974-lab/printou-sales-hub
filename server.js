@@ -1407,18 +1407,32 @@ app.get('/api/import-ml-catalog', async (req, res) => {
         const userData = await userRes.json();
         const userId = userData.id;
         
-        // 2. Buscar todos os anúncios ativos do usuário
-        // Fazendo busca paginada simples (puxa até 100 itens)
-        const searchRes = await fetch(`https://api.mercadolibre.com/users/${userId}/items/search?status=active&limit=100`, {
-            headers: { 'Authorization': `Bearer ${accessToken}` }
-        });
-        if (!searchRes.ok) {
-            const errText = await searchRes.text();
-            throw new Error(`Falha API ML (items/search): Status ${searchRes.status} - ${errText}`);
-        }
-        const searchData = await searchRes.json();
+        // 2. Buscar TODOS os anúncios ativos do usuário (usando paginação para mais de 100 itens)
+        let mlbIds = [];
+        let offset = 0;
+        const limit = 50;
+        let hasMore = true;
         
-        const mlbIds = searchData.results || [];
+        while (hasMore) {
+            const searchRes = await fetch(`https://api.mercadolibre.com/users/${userId}/items/search?status=active&limit=${limit}&offset=${offset}`, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+            if (!searchRes.ok) {
+                const errText = await searchRes.text();
+                throw new Error(`Falha API ML (items/search): Status ${searchRes.status} - ${errText}`);
+            }
+            const searchData = await searchRes.json();
+            
+            const results = searchData.results || [];
+            mlbIds = mlbIds.concat(results);
+            
+            if (results.length < limit) {
+                hasMore = false;
+            } else {
+                offset += limit;
+            }
+        }
+        
         if (mlbIds.length === 0) {
             return res.json({ success: true, message: "Nenhum anúncio ativo encontrado no Mercado Livre." });
         }
