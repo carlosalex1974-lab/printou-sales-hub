@@ -809,6 +809,25 @@ app.get('/api/facebook/config', async (req, res) => {
     }
 });
 
+  // Salvar credenciais do Mercado Livre antes do redirecionamento
+  app.post('/api/settings/mercadolivre', async (req, res) => {
+      try {
+          const { accountKey, clientId, clientSecret } = req.body;
+          const db = await readDb();
+          if (!db.credentials) db.credentials = {};
+          if (!db.credentials[accountKey]) db.credentials[accountKey] = {};
+          
+          db.credentials[accountKey].clientId = clientId;
+          db.credentials[accountKey].clientSecret = clientSecret;
+          
+          await saveDb(db);
+          res.json({ success: true });
+      } catch (e) {
+          console.error(e);
+          res.status(500).json({ error: "Erro ao salvar credenciais" });
+      }
+  });
+
 // Salvar configurações do Facebook
 app.post('/api/facebook/config', async (req, res) => {
     try {

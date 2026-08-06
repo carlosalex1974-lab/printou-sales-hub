@@ -4059,16 +4059,32 @@
                 }
             };
 
-            const handleAuthML = (accountKey) => {
+            const handleAuthML = async (accountKey) => {
                 const clientId = accountKey === 'mercadolivre2' ? ml2ClientId : mlClientId;
-                if (!clientId) {
-                    alert('Por favor, insira e salve o Client ID antes de tentar conectar a conta.');
+                const clientSecret = accountKey === 'mercadolivre2' ? ml2ClientSecret : mlClientSecret;
+                
+                if (!clientId || !clientSecret) {
+                    alert('Por favor, preencha o Client ID e Client Secret antes de tentar conectar a conta.');
                     return;
                 }
-                const state = accountKey === 'mercadolivre2' ? 'ml2' : 'ml1';
-                const redirectUri = encodeURIComponent(`${window.location.origin}/api/auth/mercadolivre/callback`);
-                const authUrl = `https://auth.mercadolivre.com.br/authorization?response_type=code&client_id=${clientId}&redirect_uri=${redirectUri}&state=${state}`;
-                window.location.href = authUrl;
+
+                try {
+                    const btn = window.event ? window.event.target : document.activeElement;
+                    if (btn) btn.innerHTML = 'Salvando...';
+                    
+                    await fetch('/api/settings/mercadolivre', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ accountKey, clientId, clientSecret })
+                    });
+                    
+                    const state = accountKey === 'mercadolivre2' ? 'ml2' : 'ml1';
+                    const redirectUri = encodeURIComponent(`${window.location.origin}/api/auth/mercadolivre/callback`);
+                    const authUrl = `https://auth.mercadolivre.com.br/authorization?response_type=code&client_id=${clientId}&redirect_uri=${redirectUri}&state=${state}`;
+                    window.location.href = authUrl;
+                } catch (e) {
+                    alert("Erro ao salvar credenciais antes de redirecionar.");
+                }
             };
 
             const handleResetDatabase = async () => {
