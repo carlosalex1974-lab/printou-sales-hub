@@ -408,16 +408,16 @@ app.post('/api/webhooks/:provider', async (req, res) => {
     
     console.log(`[WEBHOOK] Notificação recebida de ${provider}:`, payload);
     
-    // Se for notificação do Mercado Livre de outros tópicos (como items, questions, etc.), ignoramos
-    if (provider === 'mercadolivre' && payload.topic && payload.topic !== 'orders') {
-        console.log(`[WEBHOOK] Ignorando notificação do tópico "${payload.topic}" do Mercado Livre (apenas pedidos são processados).`);
+    // Se for notificação do Mercado Livre de outros tópicos, ignoramos (agora suporta items)
+    if (provider === 'mercadolivre' && payload.topic && !['orders', 'created_orders', 'items'].includes(payload.topic)) {
+        console.log(`[WEBHOOK] Ignorando notificação do tópico "${payload.topic}" do Mercado Livre (não suportado).`);
         return res.json({ success: true, message: `Tópico "${payload.topic}" ignorado.` });
     }
 
-    // Identificação precoce do ID do pedido para a trava de concorrência
+    // Identificação precoce do ID para a trava de concorrência
     let orderIdCandidate = null;
     if (provider === 'mercadolivre') {
-        if (payload.resource && payload.topic === 'orders') {
+        if (payload.resource && (payload.topic === 'orders' || payload.topic === 'items')) {
             orderIdCandidate = payload.resource.split('/').pop();
         } else {
             orderIdCandidate = payload.order_id || payload.order_sn || null;
@@ -440,6 +440,81 @@ app.post('/api/webhooks/:provider', async (req, res) => {
     try {
         const db = await readDb();
         const todayStr = new Date().toISOString().split('T')[0];
+
+        // Processamento específico para atualização de Anúncios/Estoque do ML
+        if (provider === 'mercadolivre' && payload.resource && payload.topic === 'items') {
+            const mlbId = payload.resource.split('/').pop();
+            const mlUserId = String(payload.user_id);
+            
+            // Identifica qual conta do ML
+            let accountKey = 'mercadolivre';
+            if (db.credentials.mercadolivre2 && String(db.credentials.mercadolivre2.userId) === mlUserId) {
+                accountKey = 'mercadolivre2';
+            }
+            
+            const accessToken = await getValidAccessToken(accountKey, db);
+            if (!accessToken) {
+                console.log(`[WEBHOOK-ITEMS] Ignorando ${mlbId}: Token inválido.`);
+                return res.json({ success: true, message: 'Token de acesso inválido/não configurado.' });
+            }
+
+            // Buscar dados do item na API (Não bloqueia por PolicyAgent, pois é 1 item específico)
+            const itemRes = await fetch(`https://api.mercadolibre.com/items/${mlbId}?attributes=id,title,price,available_quantity,pictures,seller_custom_field`, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+
+            if (!itemRes.ok) {
+                console.error(`[WEBHOOK-ITEMS] Erro ao buscar item ${mlbId}:`, await itemRes.text());
+                return res.status(500).json({ error: 'Falha ao consultar API do ML para este item.' });
+            }
+
+            const itemData = await itemRes.json();
+            const localProductIndex = db.products.findIndex(p => p.id === mlbId);
+            let logMsg = '';
+
+            if (localProductIndex >= 0) {
+                // Atualiza produto existente (Estoque)
+                const oldStock = db.products[localProductIndex].stock || 0;
+                db.products[localProductIndex].stock = itemData.available_quantity;
+                db.products[localProductIndex].price = itemData.price;
+                
+                if (oldStock !== itemData.available_quantity) {
+                    logMsg = `🔄 [WEBHOOK] Estoque do item "${itemData.title}" atualizado via ML: de ${oldStock} para ${itemData.available_quantity}.`;
+                } else {
+                    logMsg = `🔄 [WEBHOOK] Item "${itemData.title}" verificado (Sem mudança de estoque).`;
+                }
+            } else {
+                // Cria novo produto
+                const sku = itemData.seller_custom_field || '';
+                const imageUrl = (itemData.pictures && itemData.pictures.length > 0) ? itemData.pictures[0].secure_url : '';
+                
+                db.products.push({
+                    id: mlbId,
+                    name: itemData.title,
+                    type: 'resale',
+                    stock: itemData.available_quantity,
+                    price: itemData.price,
+                    cost: itemData.price * 0.5,
+                    imageUrl,
+                    sku
+                });
+                logMsg = `🆕 [WEBHOOK] Novo anúncio detectado no ML e cadastrado automaticamente: "${itemData.title}" com estoque ${itemData.available_quantity}.`;
+            }
+
+            // Registra no log do sistema
+            db.integrationLogs = db.integrationLogs || [];
+            db.integrationLogs.push({
+                id: `log_webhook_item_${Date.now()}`,
+                timestamp: new Date().toLocaleTimeString('pt-BR'),
+                type: 'info',
+                message: logMsg
+            });
+
+            await saveDb(db);
+            console.log(logMsg);
+            
+            return res.json({ success: true, message: 'Item processado com sucesso.' });
+        }
         
         let orderId;
         let channelId;
@@ -1493,6 +1568,89 @@ app.get('/api/import-ml-catalog', async (req, res) => {
     } catch (e) {
         console.error("[IMPORT ML] Erro geral:", e);
         res.status(500).json({ error: e.message || "Erro ao importar catálogo do Mercado Livre." });
+    }
+});
+
+app.post('/api/import-ml-catalog-from-list', async (req, res) => {
+    try {
+        const { mlbIds } = req.body;
+        if (!mlbIds || !Array.isArray(mlbIds) || mlbIds.length === 0) {
+            return res.status(400).json({ error: "Nenhum código MLB fornecido." });
+        }
+
+        const db = await readDb();
+        const accessToken = (await getValidAccessToken('mercadolivre', db)) || (await getValidAccessToken('mercadolivre2', db));
+        if (!accessToken) {
+            return res.status(400).json({ error: "Mercado Livre não conectado." });
+        }
+
+        const existingMlbs = new Set();
+        (db.products || []).forEach(p => {
+            if (p.externalIds) p.externalIds.forEach(id => {
+                if (id.startsWith('MLB')) existingMlbs.add(id);
+            });
+        });
+
+        // Limpa e extrai os IDs corretamente da lista (remove espaços, garante prefixo MLB)
+        const cleanedMlbIds = mlbIds
+            .map(id => id.trim().toUpperCase())
+            .filter(id => id.startsWith('MLB'));
+
+        const newMlbIds = cleanedMlbIds.filter(id => !existingMlbs.has(id));
+        
+        if (newMlbIds.length === 0) {
+            return res.json({ success: true, message: "Todos os códigos fornecidos já estão cadastrados na plataforma." });
+        }
+
+        let importedCount = 0;
+        for (const mlbId of newMlbIds) {
+            try {
+                const itemRes = await fetch(`https://api.mercadolibre.com/items/${mlbId}`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                if (!itemRes.ok) continue;
+                
+                const itemData = await itemRes.json();
+                
+                let imageUrl = '';
+                if (itemData.pictures && itemData.pictures.length > 0) {
+                    imageUrl = itemData.pictures[0].secure_url || itemData.pictures[0].url;
+                } else if (itemData.secure_thumbnail) {
+                    imageUrl = itemData.secure_thumbnail;
+                } else if (itemData.thumbnail) {
+                    imageUrl = itemData.thumbnail.replace('-I.jpg', '-O.jpg');
+                }
+                
+                const newProduct = {
+                    id: 'p_ml_' + Date.now().toString().slice(-6) + Math.random().toString(36).substr(2, 4),
+                    name: itemData.title,
+                    sku: itemData.seller_custom_field || mlbId,
+                    type: 'resale',
+                    stock: itemData.available_quantity ? parseInt(itemData.available_quantity) : 0,
+                    alertThreshold: 3,
+                    acquisitionCost: 0.00,
+                    price: parseFloat(itemData.price) || 0.00,
+                    supplierId: '',
+                    image: imageUrl,
+                    externalIds: [mlbId]
+                };
+                
+                if (!db.products) db.products = [];
+                db.products.push(newProduct);
+                importedCount++;
+            } catch (err) {
+                console.error(`[IMPORT ML LIST] Erro ao importar ${mlbId}:`, err.message);
+            }
+        }
+
+        if (importedCount > 0) {
+            await saveDb(db);
+        }
+
+        res.json({ success: true, message: `Catálogo importado com sucesso via lista manual! ${importedCount} novos produtos foram cadastrados.` });
+    } catch (e) {
+        console.error("[IMPORT ML LIST] Erro geral:", e);
+        res.status(500).json({ error: e.message || "Erro ao processar a lista de anúncios." });
     }
 });
 
