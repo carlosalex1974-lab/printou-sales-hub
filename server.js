@@ -1412,16 +1412,14 @@ app.get('/api/sync-ml-stock', async (req, res) => {
         
         let updatedCount = 0;
         
-        // Puxar estoque apenas para produtos que contenham 'filamento' no nome e que tenham MLB
-        const filamentosParaAtualizar = (db.products || []).filter(p => 
-            p.name && 
-            p.name.toLowerCase().includes('filamento') && 
-            p.externalIds && 
-            p.externalIds.some(id => id.startsWith('MLB'))
+        // Puxar estoque para QUALQUER produto que tenha MLB (Filamentos, Mesas, etc)
+        const produtosParaAtualizar = (db.products || []).filter(p => 
+            (p.externalIds && p.externalIds.some(id => id.startsWith('MLB'))) ||
+            (p.id && p.id.startsWith('MLB'))
         );
         
-        for (const prod of filamentosParaAtualizar) {
-            const mlbId = prod.externalIds.find(id => id.startsWith('MLB'));
+        for (const prod of produtosParaAtualizar) {
+            const mlbId = (prod.externalIds && prod.externalIds.find(id => id.startsWith('MLB'))) || prod.id;
             if (!mlbId) continue;
             
             
@@ -1962,4 +1960,5 @@ app.listen(PORT, () => {
         pollCancelledOrders();
     }, 10 * 60 * 1000);
 });
+
 
