@@ -1418,49 +1418,67 @@ app.get('/api/sync-ml-stock', async (req, res) => {
             (p.id && p.id.startsWith('MLB'))
         );
         
-        for (const prod of produtosParaAtualizar) {
-            const mlbId = (prod.externalIds && prod.externalIds.find(id => id.startsWith('MLB'))) || prod.id;
-            if (!mlbId) continue;
+        const chunkSize = 20;
+        for (let i = 0; i < produtosParaAtualizar.length; i += chunkSize) {
+            const chunk = produtosParaAtualizar.slice(i, i + chunkSize);
+            const idsStr = chunk.map(p => {
+                return (p.externalIds && p.externalIds.find(id => id.startsWith("MLB"))) || p.id;
+            }).filter(Boolean).join(",");
             
+            if (!idsStr) continue;
             
             try {
-                const response = await fetch(`https://api.mercadolibre.com/items/${mlbId}`, {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                const response = await fetch(`https://api.mercadolibre.com/items?ids=${idsStr}&attributes=id,title,price,pictures,secure_thumbnail,thumbnail,available_quantity,variations`, {
+                    headers: { "Authorization": `Bearer ${accessToken}` }
                 });
                 
                 if (response.ok) {
-                    const itemData = await response.json();
-                    let changed = false;
+                    const itemsData = await response.json();
                     
-                    if (itemData.available_quantity !== undefined) {
-                        const novoEstoque = parseInt(itemData.available_quantity);
-                        if (prod.stock !== novoEstoque) {
+                    for (const itemRes of itemsData) {
+                        if (itemRes.code !== 200 || !itemRes.body) continue;
+                        const itemData = itemRes.body;
+                        
+                        const prod = produtosParaAtualizar.find(p => 
+                            (p.externalIds && p.externalIds.includes(itemData.id)) || p.id === itemData.id
+                        );
+                        if (!prod) continue;
+                        
+                        let changed = false;
+                        
+                        // Busca estoque na raiz ou na primeira variauo
+                        let novoEstoque = itemData.available_quantity !== undefined ? parseInt(itemData.available_quantity) : undefined;
+                        if (novoEstoque === undefined && itemData.variations && itemData.variations.length > 0) {
+                            novoEstoque = parseInt(itemData.variations[0].available_quantity);
+                        }
+                        
+                        if (novoEstoque !== undefined && prod.stock !== novoEstoque) {
                             prod.stock = novoEstoque;
                             changed = true;
                             console.log(`[SYNC-ML-PULL] Atualizado estoque de "${prod.name}" para ${novoEstoque} un.`);
                         }
+                        
+                        let novaImagem = null;
+                        if (itemData.pictures && itemData.pictures.length > 0) {
+                            novaImagem = itemData.pictures[0].secure_url || itemData.pictures[0].url;
+                        } else if (itemData.secure_thumbnail) {
+                            novaImagem = itemData.secure_thumbnail;
+                        } else if (itemData.thumbnail) {
+                            novaImagem = itemData.thumbnail.replace("-I.jpg", "-O.jpg");
+                        }
+                        
+                        if (novaImagem && prod.image !== novaImagem) {
+                            prod.image = novaImagem;
+                            changed = true;
+                            console.log(`[SYNC-ML-PULL] Atualizada imagem de "${prod.name}".`);
+                        }
+                        
+                        if (changed) {
+                            updatedCount++;
+                        }
                     }
-                    
-                    // Puxar também a imagem (thumbnail de alta resolução ou secure_url)
-                    let novaImagem = null;
-                    if (itemData.pictures && itemData.pictures.length > 0) {
-                        novaImagem = itemData.pictures[0].secure_url || itemData.pictures[0].url;
-                    } else if (itemData.secure_thumbnail) {
-                        novaImagem = itemData.secure_thumbnail;
-                    } else if (itemData.thumbnail) {
-                        // Converte thumbnail normal (-I.jpg) para qualidade melhor (-O.jpg)
-                        novaImagem = itemData.thumbnail.replace('-I.jpg', '-O.jpg');
-                    }
-                    
-                    if (novaImagem && prod.image !== novaImagem) {
-                        prod.image = novaImagem;
-                        changed = true;
-                        console.log(`[SYNC-ML-PULL] Atualizada imagem de "${prod.name}".`);
-                    }
-                    
-                    if (changed) {
-                        updatedCount++;
-                    }
+                }
+
                 }
             } catch (err) {
                 console.error(`[SYNC-ML-PULL] Erro ao consultar ${mlbId}:`, err.message);
@@ -1960,5 +1978,6 @@ app.listen(PORT, () => {
         pollCancelledOrders();
     }, 10 * 60 * 1000);
 });
+
 
 
