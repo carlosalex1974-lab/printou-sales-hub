@@ -1407,9 +1407,9 @@ app.get('/api/import-ml-catalog', async (req, res) => {
         const userData = await userRes.json();
         const userId = userData.id;
         
-        // 2. Buscar os anúncios do usuário (Ativos e Pausados) para garantir que puxamos o máximo possível
+        // 2. Buscar os anúncios do usuário (Apenas Ativos, pois sem isso o ML bloqueia via PolicyAgent)
         // Limite máximo sem paginação bloqueada é 100
-        const searchRes = await fetch(`https://api.mercadolibre.com/users/${userId}/items/search?limit=100`, {
+        const searchRes = await fetch(`https://api.mercadolibre.com/users/${userId}/items/search?status=active&limit=100`, {
             headers: { 'Authorization': `Bearer ${accessToken}` }
         });
         if (!searchRes.ok) {
