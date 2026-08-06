@@ -1407,16 +1407,14 @@ app.get('/api/import-ml-catalog', async (req, res) => {
         const userData = await userRes.json();
         const userId = userData.id;
         
-        // 2. Buscar TODOS os anúncios ativos do usuário usando a API de Scroll do ML
+        // 2. Buscar TODOS os anúncios ativos do usuário usando a API Pública de Busca (evita bloqueios de segurança)
         let mlbIds = [];
+        let offset = 0;
+        const limit = 50;
         let hasMore = true;
-        let scrollId = '';
         
         while (hasMore) {
-            let url = `https://api.mercadolibre.com/users/${userId}/items/search?status=active&search_type=scan`;
-            if (scrollId) {
-                url = `https://api.mercadolibre.com/users/${userId}/items/search?search_type=scan&scroll_id=${scrollId}`;
-            }
+            const url = `https://api.mercadolibre.com/sites/MLB/search?seller_id=${userId}&status=active&limit=${limit}&offset=${offset}`;
             
             const searchRes = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${accessToken}` }
@@ -1424,19 +1422,20 @@ app.get('/api/import-ml-catalog', async (req, res) => {
             
             if (!searchRes.ok) {
                 const errText = await searchRes.text();
-                throw new Error(`Falha API ML (items/search): Status ${searchRes.status} - ${errText}`);
+                throw new Error(`Falha API ML (sites/MLB/search): Status ${searchRes.status} - ${errText}`);
             }
             const searchData = await searchRes.json();
             
             const results = searchData.results || [];
             if (results.length > 0) {
-                mlbIds = mlbIds.concat(results);
+                // A API pública retorna um array de objetos, não apenas os IDs. Mapear para pegar apenas o .id
+                mlbIds = mlbIds.concat(results.map(r => r.id));
             }
             
-            if (!searchData.scroll_id || results.length === 0) {
+            if (results.length < limit || offset >= 1000) { // Safety break
                 hasMore = false;
             } else {
-                scrollId = searchData.scroll_id;
+                offset += limit;
             }
         }
         
