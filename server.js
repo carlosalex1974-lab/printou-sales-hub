@@ -1407,16 +1407,21 @@ app.get('/api/import-ml-catalog', async (req, res) => {
         const userData = await userRes.json();
         const userId = userData.id;
         
-        // 2. Buscar TODOS os anúncios ativos do usuário (usando paginação para mais de 100 itens)
+        // 2. Buscar TODOS os anúncios ativos do usuário usando a API de Scroll do ML
         let mlbIds = [];
-        let offset = 0;
-        const limit = 50;
         let hasMore = true;
+        let scrollId = '';
         
         while (hasMore) {
-            const searchRes = await fetch(`https://api.mercadolibre.com/users/${userId}/items/search?status=active&limit=${limit}&offset=${offset}`, {
+            let url = `https://api.mercadolibre.com/users/${userId}/items/search?status=active&search_type=scan`;
+            if (scrollId) {
+                url = `https://api.mercadolibre.com/users/${userId}/items/search?search_type=scan&scroll_id=${scrollId}`;
+            }
+            
+            const searchRes = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${accessToken}` }
             });
+            
             if (!searchRes.ok) {
                 const errText = await searchRes.text();
                 throw new Error(`Falha API ML (items/search): Status ${searchRes.status} - ${errText}`);
@@ -1424,12 +1429,14 @@ app.get('/api/import-ml-catalog', async (req, res) => {
             const searchData = await searchRes.json();
             
             const results = searchData.results || [];
-            mlbIds = mlbIds.concat(results);
+            if (results.length > 0) {
+                mlbIds = mlbIds.concat(results);
+            }
             
-            if (results.length < limit) {
+            if (!searchData.scroll_id || results.length === 0) {
                 hasMore = false;
             } else {
-                offset += limit;
+                scrollId = searchData.scroll_id;
             }
         }
         
