@@ -1412,11 +1412,12 @@ app.get('/api/sync-ml-stock', async (req, res) => {
         
         let updatedCount = 0;
         
-        // Puxar estoque para QUALQUER produto que tenha MLB (Filamentos, Mesas, etc)
-        const produtosParaAtualizar = (db.products || []).filter(p => 
-            (p.externalIds && p.externalIds.some(id => id.startsWith('MLB'))) ||
-            (p.id && p.id.startsWith('MLB'))
-        );
+        // Puxar estoque APENAS para produtos que sejam filamentos (evita atualizar produtos 3D sob demanda)
+        const produtosParaAtualizar = (db.products || []).filter(p => {
+            const hasMlb = (p.externalIds && p.externalIds.some(id => id.startsWith('MLB'))) || (p.id && p.id.startsWith('MLB'));
+            const isFilament = p.name && p.name.toLowerCase().includes('filament');
+            return hasMlb && isFilament;
+        });
         
         const chunkSize = 20;
         for (let i = 0; i < produtosParaAtualizar.length; i += chunkSize) {
