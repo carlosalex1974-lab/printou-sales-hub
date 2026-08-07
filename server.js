@@ -260,7 +260,16 @@ app.post('/api/data', async (req, res) => {
         }
 
         const mergedSales = (newData.sales && newData.sales.length > 0) ? newData.sales : currentData.sales;
-        const mergedProducts = (newData.products && newData.products.length > 0) ? newData.products : currentData.products;
+        let mergedProducts = (newData.products && newData.products.length > 0) ? newData.products : currentData.products;
+        
+        // Proteção rigorosa: Impede que o localStorage do frontend ressuscite produtos deletados (PRD ou não-filamentos)
+        if (mergedProducts) {
+            mergedProducts = mergedProducts.filter(p => {
+                const hasMlb = (p.externalIds && p.externalIds.some(id => id.startsWith('MLB'))) || (p.id && p.id.startsWith('MLB'));
+                return hasMlb && p.name && p.name.toLowerCase().includes('filament');
+            });
+        }
+        
         const mergedFilaments = (newData.filaments && newData.filaments.length > 0) ? newData.filaments : currentData.filaments;
         const mergedSuppliers = (newData.suppliers && newData.suppliers.length > 0) ? newData.suppliers : currentData.suppliers;
         const mergedExpenses = (newData.expenses && newData.expenses.length > 0) ? newData.expenses : currentData.expenses;
