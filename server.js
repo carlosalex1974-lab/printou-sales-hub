@@ -1456,13 +1456,15 @@ app.get('/api/sync-ml-stock', async (req, res) => {
                         
                         let changed = false;
                         
-                        // Busca estoque na raiz ou na primeira variauo
-                        let novoEstoque = itemData.available_quantity !== undefined ? parseInt(itemData.available_quantity) : undefined;
-                        if (novoEstoque === undefined && itemData.variations && itemData.variations.length > 0) {
-                            novoEstoque = parseInt(itemData.variations[0].available_quantity);
+                        // Busca estoque somando todas as variações se existirem, senão pega da raiz
+                        let novoEstoque = 0;
+                        if (itemData.variations && itemData.variations.length > 0) {
+                            novoEstoque = itemData.variations.reduce((acc, v) => acc + (parseInt(v.available_quantity) || 0), 0);
+                        } else {
+                            novoEstoque = parseInt(itemData.available_quantity) || 0;
                         }
                         
-                        if (novoEstoque !== undefined && prod.stock !== novoEstoque) {
+                        if (prod.stock !== novoEstoque) {
                             prod.stock = novoEstoque;
                             changed = true;
                             console.log(`[SYNC-ML-PULL] Atualizado estoque de "${prod.name}" para ${novoEstoque} un.`);
@@ -1578,6 +1580,11 @@ app.get('/api/import-ml-catalog', async (req, res) => {
                 if (!itemRes.ok) continue;
                 
                 const itemData = await itemRes.json();
+                
+                // Ignora produtos que não são filamentos (evita importar produtos 3D)
+                if (!itemData.title || !itemData.title.toLowerCase().includes('filament')) {
+                    continue;
+                }
                 
                 let imageUrl = '';
                 if (itemData.pictures && itemData.pictures.length > 0) {
