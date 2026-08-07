@@ -1490,8 +1490,6 @@ app.get('/api/sync-ml-stock', async (req, res) => {
                         }
                     }
                 }
-
-                }
             } catch (err) {
                 console.error(`[SYNC-ML-PULL] Erro ao consultar ${mlbId}:`, err.message);
             }
