@@ -5894,6 +5894,13 @@
                 });
             };
 
+            const handleDeleteStockItem = (id) => {
+                if (confirm("Deseja realmente excluir este item do estoque?")) {
+                    setProducts(prev => prev.filter(p => p.id !== id));
+                    alert("Produto excluído com sucesso!");
+                }
+            };
+
             // Adicionar ou editar item (Produto) diretamente pelo estoque
             const handleSaveItem = (e) => {
                 e.preventDefault();
@@ -6324,6 +6331,13 @@
                                                             className="bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/20 text-rose-400 font-extrabold text-[10px] uppercase tracking-wider py-1.5 px-3 rounded-lg transition-all"
                                                         >
                                                             - Baixa (Saída)
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => handleDeleteStockItem(prod.id)}
+                                                            className="bg-red-600/10 border border-red-600/20 hover:bg-red-600/30 text-red-500 font-extrabold text-[10px] uppercase tracking-wider py-1.5 px-3 rounded-lg transition-all ml-2"
+                                                            title="Excluir produto do estoque"
+                                                        >
+                                                            Excluir
                                                         </button>
                                                     </td>
                                                 </tr>
