@@ -1486,7 +1486,14 @@ app.get('/api/sync-ml-stock', async (req, res) => {
             }
         }
         
-        if (updatedCount > 0) {
+        // Limpa produtos antigos (PRD-) e não-filamentos importados para manter o estoque limpo
+        const originalCount = db.products.length;
+        db.products = db.products.filter(p => {
+            const hasMlb = (p.externalIds && p.externalIds.some(id => id.startsWith('MLB'))) || (p.id && p.id.startsWith('MLB'));
+            return hasMlb && p.name && p.name.toLowerCase().includes('filament');
+        });
+        
+        if (updatedCount > 0 || db.products.length !== originalCount) {
             await saveDb(db);
         }
         
