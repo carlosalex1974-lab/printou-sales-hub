@@ -266,7 +266,8 @@ app.post('/api/data', async (req, res) => {
         if (mergedProducts) {
             mergedProducts = mergedProducts.filter(p => {
                 const hasMlb = (p.externalIds && p.externalIds.some(id => id.startsWith('MLB'))) || (p.id && p.id.startsWith('MLB'));
-                return hasMlb && p.name && p.name.toLowerCase().includes('filament');
+                if (!hasMlb) return true;
+                return p.name && p.name.toLowerCase().includes('filament');
             });
         }
         
@@ -1499,7 +1500,10 @@ app.get('/api/sync-ml-stock', async (req, res) => {
         const originalCount = db.products.length;
         db.products = db.products.filter(p => {
             const hasMlb = (p.externalIds && p.externalIds.some(id => id.startsWith('MLB'))) || (p.id && p.id.startsWith('MLB'));
-            return hasMlb && p.name && p.name.toLowerCase().includes('filament');
+            // Se NÃO tem MLB, é um produto manual ou de outra plataforma. Mantém no banco!
+            if (!hasMlb) return true;
+            // Se TEM MLB, mantém apenas se for filamento
+            return p.name && p.name.toLowerCase().includes('filament');
         });
         
         if (updatedCount > 0 || db.products.length !== originalCount) {
