@@ -3540,9 +3540,9 @@
                                                 return;
                                             }
                                             
-                                            // Realizar vínculo
+                                            let updatedProducts = [];
                                             setProducts(prevProds => {
-                                                const updated = prevProds.map(p => {
+                                                updatedProducts = prevProds.map(p => {
                                                     if (p.id === masterId) {
                                                         const currentExt = p.externalIds || [];
                                                         const toAdd = [linkingProduct.id, ...(linkingProduct.externalIds || [])];
@@ -3551,11 +3551,19 @@
                                                     }
                                                     return p;
                                                 }).filter(p => p.id !== linkingProduct.id);
-                                                return updated;
+                                                return updatedProducts;
                                             });
-
+                                            
                                             setLinkingProduct(null);
-                                            alert("Produtos vinculados com sucesso!");
+                                            
+                                            // Auto-save no backend para não perder o vínculo ao recarregar a página
+                                            fetch('/api/data', {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ products: updatedProducts })
+                                            }).then(() => {
+                                                alert("Produtos vinculados e salvos com sucesso!");
+                                            }).catch(console.error);
                                         }}
                                         className="px-5 py-2.5 bg-brand-orange hover:bg-orange-600 text-black font-black text-xs rounded-xl uppercase tracking-wider transition-all"
                                     >
