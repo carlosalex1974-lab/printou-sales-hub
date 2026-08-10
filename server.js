@@ -1762,8 +1762,8 @@ async function pollMercadoLivreOrders() {
                 continue;
             }
 
-            // Busca pedidos das ultimas 72 horas
-            const since = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+            // Busca pedidos das ultimas 72 horas para cobrir o fim de semana se o servidor dormir
+            const since = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString();
             const url = `https://api.mercadolibre.com/orders/search?seller=${creds.userId}&order.date_created.from=${since}&sort=date_desc&limit=50`;
 
             const response = await fetch(url, {
