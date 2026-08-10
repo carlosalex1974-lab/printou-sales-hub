@@ -19,6 +19,7 @@ const activeLocks = new Set();
 const uri = "mongodb+srv://carlosalex1974_db_user:kPMDLXtyBwR4NUtd@printouhub.zn8nyjr.mongodb.net/?retryWrites=true&w=majority&appName=PrintouHub";
 const client = new MongoClient(uri);
 let sysCol;
+let dbMutex = Promise.resolve(); // Global mutex for DB operations
 async function connectDB() {
     await client.connect();
     sysCol = client.db("printou").collection("system");
@@ -126,11 +127,17 @@ async function readDb() {
 
 // Helper para salvar DB com escrita atômica e backups automáticos rotativos
 async function saveDb(data) {
+    const release = await new Promise(resolve => {
+        const next = dbMutex.then(() => resolve);
+        dbMutex = next.catch(() => resolve);
+    });
     try {
         const { _id, ...updateData } = data;
         await sysCol.updateOne({_id: 'main'}, {$set: updateData}, {upsert: true});
     } catch(e) {
         console.error("Erro ao salvar no MongoDB:", e);
+    } finally {
+        release();
     }
 }
 
@@ -259,7 +266,24 @@ app.post('/api/data', async (req, res) => {
             }
         }
 
-        const mergedSales = (newData.sales && newData.sales.length > 0) ? newData.sales : currentData.sales;
+        // Mescla segura de vendas (evita apagar vendas que o Auto-Sync inseriu enquanto o usuário estava editando a tela)
+        const mergedSales = [];
+        const incomingSalesMap = new Map((newData.sales || []).map(s => [s.id, s]));
+        
+        if (currentData.sales) {
+            for (const s of currentData.sales) {
+                if (incomingSalesMap.has(s.id)) {
+                    mergedSales.push(incomingSalesMap.get(s.id));
+                    incomingSalesMap.delete(s.id);
+                } else {
+                    mergedSales.push(s); // Venda foi adicionada pelo servidor, manter!
+                }
+            }
+        }
+        for (const [id, s] of incomingSalesMap.entries()) {
+            mergedSales.push(s); // Novas vendas manuais
+        }
+        mergedSales.sort((a, b) => new Date(b.date) - new Date(a.date));
         let mergedProducts = (newData.products && newData.products.length > 0) ? newData.products : currentData.products;
         
         // Proteção rigorosa: Impede que o localStorage do frontend ressuscite produtos deletados (PRD ou não-filamentos)
@@ -349,7 +373,8 @@ app.post('/api/data', async (req, res) => {
             expenses: mergedExpenses,
             credentials: mergedCredentials,
             users: newData.users || currentData.users,
-            integrationLogs: newData.integrationLogs || currentData.integrationLogs
+            integrationLogs: currentData.integrationLogs || [], // Logs são gerenciados apenas pelo servidor
+            transactions: currentData.transactions || [] // Transações mantidas do servidor
         };
         
         await saveDb(mergedData);
@@ -1777,7 +1802,22 @@ async function pollMercadoLivreOrders() {
             }
 
             const data = await response.json();
-            if (!data.results || data.results.length === 0) {
+            if (!data || !data.results) {
+                console.error(`[AUTO-SYNC] Resposta inválida da API do ML para ${accountKey}:`, data);
+                
+                // Registra erro no log para alertar o usuário sobre o token inválido
+                const freshDb = await readDb();
+                freshDb.integrationLogs = freshDb.integrationLogs || [];
+                freshDb.integrationLogs.push({
+                    id: `log_autosync_error_${Date.now()}`,
+                    timestamp: new Date().toLocaleTimeString('pt-BR'),
+                    type: 'error',
+                    message: `⚠️ [AUTO-SYNC] Falha ao sincronizar vendas da conta ${accountKey}. Por favor, reconecte a conta no painel de Integrações.`
+                });
+                await saveDb(freshDb);
+                continue;
+            }
+            if (data.results.length === 0) {
                 continue;
             }
 
