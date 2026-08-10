@@ -286,15 +286,6 @@ app.post('/api/data', async (req, res) => {
         mergedSales.sort((a, b) => new Date(b.date) - new Date(a.date));
         let mergedProducts = (newData.products && newData.products.length > 0) ? newData.products : currentData.products;
         
-        // Proteção rigorosa: Impede que o localStorage do frontend ressuscite produtos deletados (PRD ou não-filamentos)
-        if (mergedProducts) {
-            mergedProducts = mergedProducts.filter(p => {
-                const hasMlb = (p.externalIds && p.externalIds.some(id => id.startsWith('MLB'))) || (p.id && p.id.startsWith('MLB'));
-                if (!hasMlb) return true;
-                return p.name && p.name.toLowerCase().includes('filament');
-            });
-        }
-        
         const mergedFilaments = (newData.filaments && newData.filaments.length > 0) ? newData.filaments : currentData.filaments;
         const mergedSuppliers = (newData.suppliers && newData.suppliers.length > 0) ? newData.suppliers : currentData.suppliers;
         const mergedExpenses = (newData.expenses && newData.expenses.length > 0) ? newData.expenses : currentData.expenses;
