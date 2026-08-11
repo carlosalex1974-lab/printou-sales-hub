@@ -286,6 +286,19 @@
 
         const INITIAL_EXPENSES = [];
 
+        // Utilitário para mutação atômica
+        const mutateServer = async (collection, action, payload, id) => {
+            try {
+                await fetch('/api/mutate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ collection, action, payload, id })
+                });
+            } catch (e) {
+                console.error("Erro na mutação:", e);
+            }
+        };
+
         function App() {
             // --- ESTADOS DO SISTEMA ---
             const [currentUser, setCurrentUser] = useState(() => {
@@ -2320,6 +2333,7 @@
                     return;
                 }
                 if (confirm("Deseja realmente excluir esta venda?")) {
+                    mutateServer('sales', 'delete', null, id);
                     setSales(sales.filter(s => s.id !== id));
                 }
             };
@@ -2330,6 +2344,7 @@
                     alert("Atenção: Esta venda pertence a um mês fechado e não pode ser alterada.");
                     return;
                 }
+                mutateServer('sales', 'toggleCancel', null, id);
                 setSales(sales.map(s => {
                     if (s.id === id) {
                         return { ...s, status: s.status === 'Cancelado' ? 'Pago' : 'Cancelado' };
@@ -2811,6 +2826,7 @@
                     image: newProduct.image || ''
                 };
 
+                mutateServer('products', 'add', prod);
                 setProducts([...products, prod]);
                 setIsAdding(false);
                 setNewProduct({
@@ -2834,8 +2850,8 @@
 
             const handleUpdateProduct = (e) => {
                 e.preventDefault();
-                setProducts(products.map(p => p.id === editingProduct.id ? {
-                    ...p,
+                const updatedProd = {
+                    ...editingProduct, // Preserve other fields (like id)
                     name: editingProduct.name,
                     type: editingProduct.type,
                     weight: editingProduct.type === '3d' ? parseFloat(editingProduct.weight) : 0,
@@ -2852,7 +2868,10 @@
                     filamentId: editingProduct.type === '3d' ? editingProduct.filamentId : undefined,
                     image: editingProduct.image || '',
                     isPendingConfig: false
-                } : p));
+                };
+
+                mutateServer('products', 'update', updatedProd);
+                setProducts(products.map(p => p.id === editingProduct.id ? updatedProd : p));
                 setEditingProduct(null);
                 setIsAdding(false);
             };
@@ -2879,6 +2898,7 @@
 
             const handleDeleteProduct = (id) => {
                 if (confirm("Atenção: Vendas vinculadas a este produto perderão as referências. Confirmar exclusão?")) {
+                    mutateServer('products', 'delete', null, id);
                     setProducts(products.filter(p => p.id !== id));
                 }
             };
@@ -5904,6 +5924,7 @@
 
             const handleDeleteStockItem = (id) => {
                 if (confirm("Deseja realmente excluir este item do estoque?")) {
+                    mutateServer('products', 'delete', null, id);
                     setProducts(prev => prev.filter(p => p.id !== id));
                     alert("Produto excluído com sucesso!");
                 }
@@ -5916,8 +5937,8 @@
                 
                 if (editingItem) {
                     // Editar produto existente
-                    setProducts(prev => prev.map(p => p.id === editingItem.id ? {
-                        ...p,
+                    const updatedProd = {
+                        ...editingItem, // keep existing fields we aren't changing
                         id: skuCode,
                         name: newItem.name,
                         description: newItem.description,
@@ -5927,8 +5948,11 @@
                         stock: parseInt(newItem.stock) || 0,
                         alertThreshold: parseInt(newItem.alertThreshold) || 3,
                         supplierId: newItem.supplierId,
-                        image: newItem.image || p.image || ''
-                    } : p));
+                        image: newItem.image || editingItem.image || ''
+                    };
+                    
+                    mutateServer('products', 'update', updatedProd);
+                    setProducts(prev => prev.map(p => p.id === editingItem.id ? updatedProd : p));
                     
                     setEditingItem(null);
                     alert("Produto atualizado com sucesso!");
@@ -5954,6 +5978,7 @@
                         image: newItem.image || ''
                     };
 
+                    mutateServer('products', 'add', prod);
                     setProducts([...products, prod]);
 
                     if (prod.stock > 0) {
@@ -6015,6 +6040,7 @@
 
             const handleDelete = (id) => {
                 if (confirm("Deseja realmente remover este produto do catálogo e do estoque?")) {
+                    mutateServer('products', 'delete', null, id);
                     setProducts(products.filter(p => p.id !== id));
                 }
             };
@@ -6423,6 +6449,7 @@
                         leadTime: newSupplier.leadTime,
                         rating: newSupplier.rating
                     };
+                    mutateServer('suppliers', 'add', sup);
                     setSuppliers([...suppliers, sup]);
                     setIsAdding(false);
                     setNewSupplier({ name: '', material: '', leadTime: '', rating: '5.0' });
@@ -6430,6 +6457,7 @@
 
                 const handleDelete = (id) => {
                     if (confirm("Deseja realmente remover este fornecedor?")) {
+                        mutateServer('suppliers', 'delete', null, id);
                         setSuppliers(suppliers.filter(s => s.id !== id));
                     }
                 };
@@ -6789,6 +6817,7 @@
                         competency: newExpense.competency,
                         accountId: newExpense.accountId
                     };
+                    mutateServer('expenses', 'add', exp);
                     setExpenses([...expenses, exp]);
                     
                     const tx = {
@@ -6813,6 +6842,7 @@
                         return;
                     }
                     if (confirm("Deseja realmente remover esta despesa?")) {
+                        mutateServer('expenses', 'delete', null, id);
                         setExpenses(expenses.filter(e => e.id !== id));
                     }
                 };
@@ -6823,6 +6853,7 @@
                         alert("Atenção: Esta despesa pertence a um mês fechado e não pode ser alterada.");
                         return;
                     }
+                    mutateServer('expenses', 'toggleStatus', null, id);
                     setExpenses(expenses.map(e => e.id === id ? { ...e, status: e.status === 'Pago' ? 'Pendente' : 'Pago' } : e));
                 };
 

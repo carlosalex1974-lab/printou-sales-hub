@@ -16,16 +16,36 @@ const DB_FILE = path.join(DB_DIR, 'db.json');
 // Trava em memória para evitar concorrência/duplicação de webhooks
 const activeLocks = new Set();
 
-const uri = "mongodb+srv://carlosalex1974_db_user:kPMDLXtyBwR4NUtd@printouhub.zn8nyjr.mongodb.net/?retryWrites=true&w=majority&appName=PrintouHub";
+const uri = "mongodb://carlosalex1974_db_user:kPMDLXtyBwR4NUtd@ac-nbjwzq9-shard-00-00.zn8nyjr.mongodb.net:27017,ac-nbjwzq9-shard-00-01.zn8nyjr.mongodb.net:27017,ac-nbjwzq9-shard-00-02.zn8nyjr.mongodb.net:27017/printou?ssl=true&replicaSet=atlas-ph5ht3-shard-0&authSource=admin&retryWrites=true&w=majority";
 const client = new MongoClient(uri);
 let sysCol;
 let dbMutex = Promise.resolve(); // Global mutex for DB operations
-async function connectDB() {
-    await client.connect();
-    sysCol = client.db("printou").collection("system");
-    console.log("Conectado ao MongoDB Atlas!");
+
+// Wrapper seguro para ler, modificar e salvar o banco de dados atomicamente
+async function withDbLock(callback) {
+    const release = await new Promise(resolve => {
+        const next = dbMutex.then(() => resolve);
+        dbMutex = next.catch(() => resolve);
+    });
+    try {
+        await callback();
+    } finally {
+        release();
+    }
 }
-connectDB().catch(console.error);
+
+async function connectDB() {
+    try {
+        await client.connect();
+        sysCol = client.db("printou").collection("system");
+        console.log("✅ Conectado ao MongoDB Atlas!");
+    } catch (e) {
+        console.error("❌ Falha ao conectar ao MongoDB:", e.message);
+        console.log("🔄 Tentando reconectar em 10 segundos...");
+        setTimeout(connectDB, 10000);
+    }
+}
+connectDB();
 
 
 app.use(cors());
@@ -75,11 +95,20 @@ const DEFAULT_DB = {
 async function readDb() {
     let db;
     try {
+        if (!sysCol) throw new Error("Conexão com MongoDB não estabelecida.");
         const doc = await sysCol.findOne({_id: 'main'});
         db = doc || JSON.parse(JSON.stringify(DEFAULT_DB));
     } catch (e) {
-        console.error("Erro no MongoDB:", e);
-        db = JSON.parse(JSON.stringify(DEFAULT_DB));
+        console.error("Erro no MongoDB, usando arquivo local db.json como fallback:", e.message);
+        try {
+            if (fs.existsSync(DB_FILE)) {
+                db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+            } else {
+                db = JSON.parse(JSON.stringify(DEFAULT_DB));
+            }
+        } catch(err) {
+            db = JSON.parse(JSON.stringify(DEFAULT_DB));
+        }
     }
     
     db.credentials = db.credentials || {};
@@ -126,18 +155,28 @@ async function readDb() {
 }
 
 // Helper para salvar DB com escrita atômica e backups automáticos rotativos
-async function saveDb(data) {
-    const release = await new Promise(resolve => {
-        const next = dbMutex.then(() => resolve);
-        dbMutex = next.catch(() => resolve);
-    });
+async function saveDb(updateData) {
+    let savedToMongo = false;
     try {
-        const { _id, ...updateData } = data;
-        await sysCol.updateOne({_id: 'main'}, {$set: updateData}, {upsert: true});
+        if (sysCol) {
+            const { _id, ...dataToSave } = updateData;
+            await sysCol.updateOne({_id: 'main'}, {$set: dataToSave}, {upsert: true});
+            savedToMongo = true;
+        } else {
+            throw new Error("Conexão com MongoDB não estabelecida.");
+        }
     } catch(e) {
-        console.error("Erro ao salvar no MongoDB:", e);
-    } finally {
-        release();
+        console.error("Erro ao salvar no MongoDB, salvando no arquivo local db.json:", e.message);
+    }
+
+    // Fallback ou backup local
+    if (!savedToMongo) {
+        try {
+            if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR);
+            fs.writeFileSync(DB_FILE, JSON.stringify(updateData, null, 2));
+        } catch(err) {
+            console.error("Erro ao escrever fallback local:", err);
+        }
     }
 }
 
@@ -227,6 +266,42 @@ app.post('/api/monthly-closings', async (req, res) => {
         console.error("Erro ao registrar fechamento mensal:", error);
         res.status(500).json({ error: "Erro ao registrar fechamento" });
     }
+});
+
+// Endpoint genérico e atômico para mutações do Frontend
+app.post('/api/mutate', async (req, res) => {
+    await withDbLock(async () => {
+        try {
+            const { collection, action, payload, id } = req.body;
+            const db = await readDb();
+            
+            if (!db[collection]) {
+                db[collection] = [];
+            }
+            
+            if (action === 'add') {
+                db[collection].push(payload);
+            } else if (action === 'update') {
+                db[collection] = db[collection].map(item => item.id === id ? { ...item, ...payload } : item);
+            } else if (action === 'delete') {
+                db[collection] = db[collection].filter(item => item.id !== id);
+            }
+
+            // Exceção de cancelamento de venda (muda status)
+            if (action === 'toggleCancel' && collection === 'sales') {
+                db.sales = db.sales.map(s => s.id === id ? { ...s, status: s.status === 'Cancelado' ? 'Pago' : 'Cancelado' } : s);
+            }
+            if (action === 'toggleStatus' && collection === 'expenses') {
+                db.expenses = db.expenses.map(e => e.id === id ? { ...e, status: e.status === 'Pago' ? 'Pendente' : 'Pago' } : e);
+            }
+
+            await saveDb(db);
+            res.json({ success: true });
+        } catch (e) {
+            console.error("Erro no /api/mutate:", e);
+            res.status(500).json({ error: "Erro interno no servidor" });
+        }
+    });
 });
 
 // Endpoint para ler dados
