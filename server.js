@@ -281,6 +281,27 @@ app.post('/api/mutate', async (req, res) => {
             
             if (action === 'add') {
                 db[collection].push(payload);
+                
+                // Extra logic for manual sales
+                if (collection === 'sales' && payload.status !== 'Cancelado') {
+                    const productId = payload.productId;
+                    const quantity = payload.quantity || 1;
+                    
+                    const product = db.products?.find(p => p.id === productId || (p.externalIds && p.externalIds.includes(productId)));
+                    if (product) {
+                        if (product.stock !== undefined) {
+                            product.stock = Math.max(0, product.stock - quantity);
+                        }
+                        
+                        if (product.type === '3d' && product.weight && product.filamentId) {
+                            const totalWeight = product.weight * quantity;
+                            const filament = db.filaments?.find(f => f.id === product.filamentId);
+                            if (filament) {
+                                filament.currentWeight = Math.max(0, parseFloat((filament.currentWeight - totalWeight).toFixed(1)));
+                            }
+                        }
+                    }
+                }
             } else if (action === 'update') {
                 db[collection] = db[collection].map(item => item.id === id ? { ...item, ...payload } : item);
             } else if (action === 'delete') {

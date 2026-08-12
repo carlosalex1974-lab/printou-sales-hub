@@ -783,6 +783,9 @@
                         }));
                     }
                 }
+                
+                // Salvar a venda no banco de dados (o back-end não subtrai estoque de vendas manuais recebidas por /api/mutate ainda, mas a venda fica registrada)
+                mutateServer('sales', 'add', saleToAdd);
             };
 
             // --- ADICIONAR NOVA VENDA ---
