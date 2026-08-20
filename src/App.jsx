@@ -17,7 +17,7 @@ import FacebookMarketplaceView from './components/FacebookMarketplace';
 // --- DADOS INICIAIS DO LOCALSTORAGE (MOCK) ---
 const INITIAL_CHANNELS = [
     { id: 'ml1', name: 'printoustudio3d', commission: 12.0, fixedFee: 6.0, color: '#FFE600', hasFreeShippingThreshold: true, freeShippingThreshold: 79.0, defaultSellerShippingCost: 19.90, defaultBelowThresholdShippingCost: 0.0 },
-    { id: 'ml2', name: 'AlucarPrintoustudio3d', commission: 19.5, fixedFee: 6.0, color: '#FFB900', hasFreeShippingThreshold: true, freeShippingThreshold: 79.0, defaultSellerShippingCost: 19.90, defaultBelowThresholdShippingCost: 0.0 },
+    { id: 'ml2', name: 'CPS Soluções', commission: 19.5, fixedFee: 6.0, color: '#FFB900', hasFreeShippingThreshold: true, freeShippingThreshold: 79.0, defaultSellerShippingCost: 19.90, defaultBelowThresholdShippingCost: 0.0 },
     { id: 'shopee', name: 'Shopee', commission: 14.0, fixedFee: 3.0, color: '#EE4D2D', hasFreeShippingThreshold: false, freeShippingThreshold: 0, defaultSellerShippingCost: 0.0, defaultBelowThresholdShippingCost: 0.0 },
     { id: 'site', name: 'Site PrÃ³prio', commission: 3.99, fixedFee: 0.5, color: '#0088FF', hasFreeShippingThreshold: false, freeShippingThreshold: 0, defaultSellerShippingCost: 0.0, defaultBelowThresholdShippingCost: 0.0 },
     { id: 'direta', name: 'Venda Direta / Pix', commission: 0.0, fixedFee: 0.0, color: '#30D158', hasFreeShippingThreshold: false, freeShippingThreshold: 0, defaultSellerShippingCost: 0.0, defaultBelowThresholdShippingCost: 0.0 }
@@ -200,7 +200,7 @@ function App() {
                 changed = true;
             }
             if (c.id === 'ml2' && (c.name === 'Mercado Livre - Conta 2' || c.commission === 12.0)) {
-                target.name = 'AlucarPrintoustudio3d';
+                target.name = 'CPS Soluções';
                 target.commission = 19.5;
                 target.color = '#FFB900';
                 changed = true;

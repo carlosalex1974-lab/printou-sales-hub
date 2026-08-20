@@ -1424,6 +1424,49 @@ app.post('/api/transactions/transfer', async (req, res) => {
     }
 });
 
+app.put('/api/transactions/:id', async (req, res) => {
+    try {
+        const { date, description, amount, accountId, category } = req.body;
+        if (!date || !description || amount === undefined || !accountId) {
+            return res.status(400).json({ error: "Faltam campos obrigatórios." });
+        }
+        const db = await readDb();
+        const idx = db.transactions.findIndex(t => t.id === req.params.id);
+        if (idx === -1) {
+            return res.status(404).json({ error: "Transação não encontrada." });
+        }
+        db.transactions[idx] = {
+            ...db.transactions[idx],
+            date,
+            description,
+            amount: parseFloat(amount),
+            accountId,
+            category: category || 'Outros'
+        };
+        await saveDb(db);
+        res.json({ success: true, transaction: db.transactions[idx] });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Erro ao atualizar transação." });
+    }
+});
+
+app.delete('/api/transactions/:id', async (req, res) => {
+    try {
+        const db = await readDb();
+        const initialLen = db.transactions.length;
+        db.transactions = db.transactions.filter(t => t.id !== req.params.id);
+        if (db.transactions.length === initialLen) {
+            return res.status(404).json({ error: "Transação não encontrada." });
+        }
+        await saveDb(db);
+        res.json({ success: true });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Erro ao excluir transação." });
+    }
+});
+
 // --- FIM ROTAS ---
 
 // Endpoint Callback para OAuth 2.0 do Mercado Livre

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Minus, Trash2 } from 'lucide-react';
+import { Plus, Minus, Trash2, Edit2, Check, X } from 'lucide-react';
 
 export default function ExpensesView({ expenses, setExpenses, selectedMonth }) {
     const [isAdding, setIsAdding] = useState(false);
@@ -11,6 +11,26 @@ export default function ExpensesView({ expenses, setExpenses, selectedMonth }) {
         status: 'Pendente',
         competency: selectedMonth // Prefills with active dashboard filter month
     });
+
+    const [editingExpenseId, setEditingExpenseId] = useState(null);
+    const [editedExpense, setEditedExpense] = useState(null);
+
+    const handleEditClick = (exp) => {
+        setEditingExpenseId(exp.id);
+        setEditedExpense({ ...exp });
+    };
+
+    const handleCancelEdit = () => {
+        setEditingExpenseId(null);
+        setEditedExpense(null);
+    };
+
+    const handleSaveEdit = () => {
+        if (!editedExpense.name || !editedExpense.value || !editedExpense.dueDate) return;
+        setExpenses(expenses.map(e => e.id === editingExpenseId ? { ...editedExpense, value: parseFloat(editedExpense.value) } : e));
+        setEditingExpenseId(null);
+        setEditedExpense(null);
+    };
 
     // Whenever selectedMonth changes, update the form's default competency
     useEffect(() => {
@@ -177,34 +197,110 @@ export default function ExpensesView({ expenses, setExpenses, selectedMonth }) {
                                 </tr>
                             ) : (
                                 filteredExpenses.map(exp => (
-                                    <tr key={exp.id} className="hover:bg-white/5 transition-all">
-                                        <td className="py-4 px-6 font-bold text-white text-base">
-                                            {getCategoryEmoji(exp.category)} {exp.category}
-                                        </td>
-                                        <td className="py-4 px-6 font-semibold text-white">{exp.name}</td>
-                                        <td className="py-4 px-6 font-medium text-gray-400">{exp.dueDate}</td>
-                                        <td className="py-4 px-6 text-right font-bold text-white">R$ {exp.value.toFixed(2)}</td>
-                                        <td className="py-4 px-6 text-center">
-                                            <button 
-                                                onClick={() => toggleStatus(exp.id)}
-                                                className={`text-[9px] px-3 py-1.5 rounded-full font-black uppercase tracking-wider transition-all border ${
-                                                    exp.status === 'Pago' 
-                                                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
-                                                        : 'bg-rose-500/10 text-rose-400 border-rose-500/20 hover:bg-rose-500/20'
-                                                }`}
-                                            >
-                                                {exp.status}
-                                            </button>
-                                        </td>
-                                        <td className="py-4 px-6 text-right space-x-2">
-                                            <button 
-                                                onClick={() => handleDelete(exp.id)}
-                                                className="p-1.5 hover:bg-rose-500/20 text-gray-500 hover:text-rose-400 rounded-lg transition-all"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
-                                        </td>
-                                    </tr>
+                                    exp.id === editingExpenseId ? (
+                                        <tr key={exp.id} className="bg-brand-orange/5 transition-all">
+                                            <td className="py-4 px-3">
+                                                <select 
+                                                    value={editedExpense.category} 
+                                                    onChange={e => setEditedExpense({...editedExpense, category: e.target.value})}
+                                                    className="w-full bg-[#16161A] border border-brand-orange/40 text-white rounded p-1.5 focus:outline-none text-xs"
+                                                >
+                                                    <option value="Agua">💧 Água</option>
+                                                    <option value="Luz">⚡ Luz</option>
+                                                    <option value="Telefone">🌐 Telefone & Internet</option>
+                                                    <option value="Contador">💼 Contador</option>
+                                                    <option value="Outros">💸 Outros</option>
+                                                </select>
+                                            </td>
+                                            <td className="py-4 px-3">
+                                                <input 
+                                                    type="text" 
+                                                    value={editedExpense.name} 
+                                                    onChange={e => setEditedExpense({...editedExpense, name: e.target.value})}
+                                                    className="w-full bg-[#16161A] border border-brand-orange/40 text-white rounded p-1.5 focus:outline-none text-xs"
+                                                />
+                                            </td>
+                                            <td className="py-4 px-3">
+                                                <input 
+                                                    type="date" 
+                                                    value={editedExpense.dueDate} 
+                                                    onChange={e => setEditedExpense({...editedExpense, dueDate: e.target.value})}
+                                                    className="w-full bg-[#16161A] border border-brand-orange/40 text-gray-400 rounded p-1.5 focus:outline-none text-xs"
+                                                />
+                                            </td>
+                                            <td className="py-4 px-3">
+                                                <input 
+                                                    type="number" step="0.01" 
+                                                    value={editedExpense.value} 
+                                                    onChange={e => setEditedExpense({...editedExpense, value: e.target.value})}
+                                                    className="w-full bg-[#16161A] border border-brand-orange/40 text-white rounded p-1.5 focus:outline-none text-xs text-right"
+                                                />
+                                            </td>
+                                            <td className="py-4 px-3 text-center">
+                                                <select 
+                                                    value={editedExpense.status} 
+                                                    onChange={e => setEditedExpense({...editedExpense, status: e.target.value})}
+                                                    className="w-full bg-[#16161A] border border-brand-orange/40 text-white rounded p-1.5 focus:outline-none text-xs"
+                                                >
+                                                    <option value="Pendente">Pendente</option>
+                                                    <option value="Pago">Pago</option>
+                                                </select>
+                                            </td>
+                                            <td className="py-4 px-6 text-right space-x-2 whitespace-nowrap">
+                                                <button 
+                                                    onClick={handleSaveEdit}
+                                                    className="p-1.5 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/40 rounded-lg transition-all"
+                                                    title="Salvar"
+                                                >
+                                                    <Check className="w-4 h-4" />
+                                                </button>
+                                                <button 
+                                                    onClick={handleCancelEdit}
+                                                    className="p-1.5 bg-gray-500/20 text-gray-400 hover:bg-gray-500/40 rounded-lg transition-all"
+                                                    title="Cancelar"
+                                                >
+                                                    <X className="w-4 h-4" />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        <tr key={exp.id} className="hover:bg-white/5 transition-all">
+                                            <td className="py-4 px-6 font-bold text-white text-base">
+                                                {getCategoryEmoji(exp.category)} {exp.category}
+                                            </td>
+                                            <td className="py-4 px-6 font-semibold text-white">{exp.name}</td>
+                                            <td className="py-4 px-6 font-medium text-gray-400">{exp.dueDate}</td>
+                                            <td className="py-4 px-6 text-right font-bold text-white">R$ {exp.value.toFixed(2)}</td>
+                                            <td className="py-4 px-6 text-center">
+                                                <button 
+                                                    onClick={() => toggleStatus(exp.id)}
+                                                    className={`text-[9px] px-3 py-1.5 rounded-full font-black uppercase tracking-wider transition-all border ${
+                                                        exp.status === 'Pago' 
+                                                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                                                            : 'bg-rose-500/10 text-rose-400 border-rose-500/20 hover:bg-rose-500/20'
+                                                    }`}
+                                                >
+                                                    {exp.status}
+                                                </button>
+                                            </td>
+                                            <td className="py-4 px-6 text-right space-x-2 whitespace-nowrap">
+                                                <button 
+                                                    onClick={() => handleEditClick(exp)}
+                                                    className="p-1.5 hover:bg-brand-orange/20 text-gray-500 hover:text-brand-orange rounded-lg transition-all"
+                                                    title="Editar"
+                                                >
+                                                    <Edit2 className="w-4 h-4" />
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleDelete(exp.id)}
+                                                    className="p-1.5 hover:bg-rose-500/20 text-gray-500 hover:text-rose-400 rounded-lg transition-all"
+                                                    title="Excluir"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    )
                                 ))
                             )}
                         </tbody>
