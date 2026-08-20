@@ -308,9 +308,35 @@ app.post('/api/mutate', async (req, res) => {
                 db[collection] = db[collection].filter(item => item.id !== id);
             }
 
-            // Exceção de cancelamento de venda (muda status)
+            // Exceção de cancelamento de venda (muda status e devolve/retira estoque)
             if (action === 'toggleCancel' && collection === 'sales') {
-                db.sales = db.sales.map(s => s.id === id ? { ...s, status: s.status === 'Cancelado' ? 'Pago' : 'Cancelado' } : s);
+                db.sales = db.sales.map(s => {
+                    if (s.id === id) {
+                        const newStatus = s.status === 'Cancelado' ? 'Pago' : 'Cancelado';
+                        const product = db.products?.find(p => p.id === s.productId || (p.externalIds && p.externalIds.includes(s.productId)));
+                        
+                        if (product) {
+                            const qty = s.quantity || 1;
+                            if (newStatus === 'Cancelado') {
+                                // Devolver ao estoque
+                                if (product.stock !== undefined) product.stock += qty;
+                                if (product.type === '3d' && product.weight && product.filamentId) {
+                                    const filament = db.filaments?.find(f => f.id === product.filamentId);
+                                    if (filament) filament.currentWeight = parseFloat((filament.currentWeight + (product.weight * qty)).toFixed(1));
+                                }
+                            } else {
+                                // Retirar do estoque novamente
+                                if (product.stock !== undefined) product.stock = Math.max(0, product.stock - qty);
+                                if (product.type === '3d' && product.weight && product.filamentId) {
+                                    const filament = db.filaments?.find(f => f.id === product.filamentId);
+                                    if (filament) filament.currentWeight = Math.max(0, parseFloat((filament.currentWeight - (product.weight * qty)).toFixed(1)));
+                                }
+                            }
+                        }
+                        return { ...s, status: newStatus };
+                    }
+                    return s;
+                });
             }
             if (action === 'toggleStatus' && collection === 'expenses') {
                 db.expenses = db.expenses.map(e => e.id === id ? { ...e, status: e.status === 'Pago' ? 'Pendente' : 'Pago' } : e);
@@ -2137,8 +2163,20 @@ async function pollCancelledOrders() {
             const sale = freshDb.sales.find(s => s.id === String(order.id) && s.status !== 'Cancelado');
             if (sale) {
                 sale.status = 'Cancelado';
+                
+                // Devolver ao estoque
+                const product = freshDb.products?.find(p => p.id === sale.productId || (p.externalIds && p.externalIds.includes(sale.productId)));
+                if (product) {
+                    const qty = sale.quantity || 1;
+                    if (product.stock !== undefined) product.stock += qty;
+                    if (product.type === '3d' && product.weight && product.filamentId) {
+                        const filament = freshDb.filaments?.find(f => f.id === product.filamentId);
+                        if (filament) filament.currentWeight = parseFloat((filament.currentWeight + (product.weight * qty)).toFixed(1));
+                    }
+                }
+
                 updated = true;
-                console.log(`[AUTO-SYNC] Pedido #${order.id} marcado como cancelado.`);
+                console.log(`[AUTO-SYNC] Pedido #${order.id} marcado como cancelado e estoque devolvido.`);
             }
         }
 
