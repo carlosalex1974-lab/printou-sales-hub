@@ -617,22 +617,28 @@ app.post('/api/webhooks/:provider', async (req, res) => {
             }
 
             const itemData = await itemRes.json();
-            const localProductIndex = db.products.findIndex(p => p.id === mlbId);
+            const localProductIndex = db.products.findIndex(p => p.id === mlbId || (p.externalIds && p.externalIds.includes(mlbId)));
             let logMsg = '';
 
             if (localProductIndex >= 0) {
-                // Atualiza produto existente (Estoque)
-                const oldStock = db.products[localProductIndex].stock || 0;
-                db.products[localProductIndex].stock = itemData.available_quantity;
-                db.products[localProductIndex].price = itemData.price;
+                const existingProduct = db.products[localProductIndex];
                 
-                if (oldStock !== itemData.available_quantity) {
-                    logMsg = `🔄 [WEBHOOK] Estoque do item "${itemData.title}" atualizado via ML: de ${oldStock} para ${itemData.available_quantity}.`;
+                // Regra: Atualiza estoque via ML apenas para produtos finais (resale)
+                if (existingProduct.type === 'resale') {
+                    const oldStock = existingProduct.stock || 0;
+                    existingProduct.stock = itemData.available_quantity;
+                    existingProduct.price = itemData.price;
+                    
+                    if (oldStock !== itemData.available_quantity) {
+                        logMsg = `[WEBHOOK] Estoque do produto final "${itemData.title}" atualizado via ML: de ${oldStock} para ${itemData.available_quantity}.`;
+                    } else {
+                        logMsg = `[WEBHOOK] Produto final "${itemData.title}" verificado (Sem mudança de estoque).`;
+                    }
                 } else {
-                    logMsg = `🔄 [WEBHOOK] Item "${itemData.title}" verificado (Sem mudança de estoque).`;
+                    logMsg = `[WEBHOOK] Ignorando atualização de estoque para o produto impresso 3D "${existingProduct.name}" (ML: ${mlbId}).`;
                 }
             } else {
-                // Cria novo produto
+                // Cria novo produto final (resale)
                 const sku = itemData.seller_custom_field || '';
                 const imageUrl = (itemData.pictures && itemData.pictures.length > 0) ? itemData.pictures[0].secure_url : '';
                 
@@ -642,11 +648,12 @@ app.post('/api/webhooks/:provider', async (req, res) => {
                     type: 'resale',
                     stock: itemData.available_quantity,
                     price: itemData.price,
-                    cost: itemData.price * 0.5,
+                    acquisitionCost: 0,
                     imageUrl,
+                    externalIds: [mlbId],
                     sku
                 });
-                logMsg = `🆕 [WEBHOOK] Novo anúncio detectado no ML e cadastrado automaticamente: "${itemData.title}" com estoque ${itemData.available_quantity}.`;
+                logMsg = `[WEBHOOK] Novo anúncio detectado no ML e cadastrado automaticamente como Produto Final: "${itemData.title}" com estoque ${itemData.available_quantity}.`;
             }
 
             // Registra no log do sistema
