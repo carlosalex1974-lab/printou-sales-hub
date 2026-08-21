@@ -81,7 +81,8 @@ const DEFAULT_DB = {
         mercadolivre: { clientId: '', clientSecret: '', webhookUrl: 'http://localhost:3001/api/webhooks/mercadolivre', status: 'Não Sincronizado' },
         shopee: { shopId: '', apiKey: '', webhookUrl: 'http://localhost:3001/api/webhooks/shopee', status: 'Não Sincronizado' },
         site: { apiKey: '', apiSecret: '', webhookUrl: 'http://localhost:3001/api/webhooks/site', status: 'Não Sincronizado' },
-        facebook: { accessToken: '', pageId: '1117637594770324', businessId: '1550133536629313', catalogId: '', status: 'Não Sincronizado' }
+        facebook: { accessToken: '', pageId: '1117637594770324', businessId: '1550133536629313', catalogId: '', status: 'Não Sincronizado' },
+        tiny: { token: '', status: 'Não Sincronizado' }
     },
     users: [
         { email: 'admin@printou.com', password: 'admin123', name: 'Administrador Printou', role: 'admin' },
@@ -1922,6 +1923,132 @@ app.post('/api/import-ml-catalog-from-list', async (req, res) => {
 });
 
 // Rota de fallback para entregar o React App (Single Page Application)
+
+// ==========================================
+// INTEGRAÇÃO TINY ERP - EMISSÃO DE NFE
+// ==========================================
+app.post('/api/tiny/emitir-nfe', async (req, res) => {
+    try {
+        const { saleId, orderIdEcommerce } = req.body;
+        if (!saleId || !orderIdEcommerce) {
+            return res.status(400).json({ error: "Faltam parâmetros obrigatórios (saleId ou orderIdEcommerce)." });
+        }
+
+        const db = await readDb();
+        const tinyToken = db.credentials?.tiny?.token;
+        if (!tinyToken) {
+            return res.status(400).json({ error: "Token do Tiny ERP não configurado. Vá em Integrações e adicione seu token." });
+        }
+
+        // 1. Pesquisar o pedido no Tiny usando o número do Ecommerce (ID do ML)
+        const formPesquisa = new URLSearchParams();
+        formPesquisa.append('token', tinyToken);
+        formPesquisa.append('numeroEcommerce', orderIdEcommerce);
+        formPesquisa.append('formato', 'JSON');
+
+        const resPesquisa = await fetch('https://api.tiny.com.br/api2/pedidos.pesquisa.php', {
+            method: 'POST',
+            body: formPesquisa
+        });
+        
+        const dataPesquisa = await resPesquisa.json();
+        if (dataPesquisa.retorno.status === 'Erro') {
+            return res.status(400).json({ error: `Erro ao buscar pedido no Tiny: ${dataPesquisa.retorno.erros[0].erro}` });
+        }
+
+        const pedidos = dataPesquisa.retorno.pedidos;
+        if (!pedidos || pedidos.length === 0) {
+            return res.status(404).json({ error: `Pedido ${orderIdEcommerce} não encontrado no Tiny. Certifique-se de que a integração do Tiny já puxou essa venda.` });
+        }
+
+        const tinyPedidoId = pedidos[0].pedido.id;
+
+        // 2. Gerar a Nota Fiscal a partir do Pedido
+        const formGerar = new URLSearchParams();
+        formGerar.append('token', tinyToken);
+        formGerar.append('id', tinyPedidoId);
+        formGerar.append('formato', 'JSON');
+
+        const resGerar = await fetch('https://api.tiny.com.br/api2/gerar.nota.fiscal.pedido.php', {
+            method: 'POST',
+            body: formGerar
+        });
+
+        const dataGerar = await resGerar.json();
+        
+        // Verifica se a nota já foi gerada antes e apenas pega o ID dela
+        let idNotaFiscal = null;
+        if (dataGerar.retorno.status === 'Erro') {
+            const errorMsg = dataGerar.retorno.erros[0].erro;
+            // Se o erro for que a nota já existe, precisamos pegar o id de outra forma.
+            // Para simplificar, se a nota já foi faturada, o campo id_nota_fiscal vem na pesquisa do pedido.
+            if (pedidos[0].pedido.id_nota_fiscal && pedidos[0].pedido.id_nota_fiscal !== "0") {
+                idNotaFiscal = pedidos[0].pedido.id_nota_fiscal;
+            } else {
+                return res.status(400).json({ error: `Erro ao gerar Nota Fiscal no Tiny: ${errorMsg}` });
+            }
+        } else {
+            idNotaFiscal = dataGerar.retorno.registros[0].registro.idNotaFiscal;
+        }
+
+        if (!idNotaFiscal) {
+            return res.status(400).json({ error: "Falha ao obter o ID da Nota Fiscal gerada." });
+        }
+
+        // 3. Emitir a Nota Fiscal na Sefaz
+        const formEmitir = new URLSearchParams();
+        formEmitir.append('token', tinyToken);
+        formEmitir.append('id', idNotaFiscal);
+        formEmitir.append('formato', 'JSON');
+
+        const resEmitir = await fetch('https://api.tiny.com.br/api2/nota.fiscal.emitir.php', {
+            method: 'POST',
+            body: formEmitir
+        });
+
+        const dataEmitir = await resEmitir.json();
+        if (dataEmitir.retorno.status === 'Erro') {
+            // Se o erro for "Nota Fiscal Eletrônica já está com a situação Autorizada"
+            if (dataEmitir.retorno.erros[0].erro.includes('Autorizada')) {
+                 // Nota já emitida, apenas vamos pegar o link a seguir.
+            } else {
+                return res.status(400).json({ error: `Erro ao emitir Nota na SEFAZ: ${dataEmitir.retorno.erros[0].erro}` });
+            }
+        }
+
+        // 4. Se a emissão retornou o link diretamente:
+        let linkDanfe = dataEmitir.retorno?.link_danfe;
+
+        // Se a nota já estava emitida, a API nota.fiscal.emitir retorna erro (tratado acima) sem o link.
+        // Precisamos obter o link com a API obter.link
+        if (!linkDanfe) {
+            const formLink = new URLSearchParams();
+            formLink.append('token', tinyToken);
+            formLink.append('id', idNotaFiscal);
+            formLink.append('formato', 'JSON');
+            
+            const resLink = await fetch('https://api.tiny.com.br/api2/nota.fiscal.obter.link.php', {
+                method: 'POST',
+                body: formLink
+            });
+            const dataLink = await resLink.json();
+            if (dataLink.retorno.status === 'OK') {
+                linkDanfe = dataLink.retorno.link_danfe;
+            }
+        }
+
+        if (linkDanfe) {
+            res.json({ success: true, link: linkDanfe, message: "Nota Fiscal emitida com sucesso!" });
+        } else {
+            res.status(400).json({ error: "A nota parece ter sido emitida, mas o Tiny não retornou o link do PDF." });
+        }
+
+    } catch (err) {
+        console.error("Erro interno NFe Tiny:", err);
+        res.status(500).json({ error: "Erro interno ao processar a emissão com o Tiny." });
+    }
+});
+
 app.use((req, res) => {
     res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });

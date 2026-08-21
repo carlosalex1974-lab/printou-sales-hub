@@ -270,7 +270,7 @@
         // --- DADOS INICIAIS DO LOCALSTORAGE (MOCK) ---
         const INITIAL_CHANNELS = [
             { id: 'ml1', name: 'printoustudio3d', commission: 12.0, fixedFee: 6.0, color: '#FFE600', hasFreeShippingThreshold: true, freeShippingThreshold: 79.0, defaultSellerShippingCost: 19.90, defaultBelowThresholdShippingCost: 0.0 },
-            { id: 'ml2', name: 'CPS Soluções', commission: 19.5, fixedFee: 6.0, color: '#14B8A6', hasFreeShippingThreshold: true, freeShippingThreshold: 79.0, defaultSellerShippingCost: 19.90, defaultBelowThresholdShippingCost: 0.0 },
+            { id: 'ml2', name: 'CPS Soluï¿½ï¿½es', commission: 19.5, fixedFee: 6.0, color: '#14B8A6', hasFreeShippingThreshold: true, freeShippingThreshold: 79.0, defaultSellerShippingCost: 19.90, defaultBelowThresholdShippingCost: 0.0 },
             { id: 'shopee', name: 'Shopee', commission: 14.0, fixedFee: 3.0, color: '#EE4D2D', hasFreeShippingThreshold: false, freeShippingThreshold: 0, defaultSellerShippingCost: 0.0, defaultBelowThresholdShippingCost: 0.0 },
             { id: 'site', name: 'Site PrÃ³prio', commission: 3.99, fixedFee: 0.5, color: '#0088FF', hasFreeShippingThreshold: false, freeShippingThreshold: 0, defaultSellerShippingCost: 0.0, defaultBelowThresholdShippingCost: 0.0 },
             { id: 'direta', name: 'Venda Direta / Pix', commission: 0.0, fixedFee: 0.0, color: '#30D158', hasFreeShippingThreshold: false, freeShippingThreshold: 0, defaultSellerShippingCost: 0.0, defaultBelowThresholdShippingCost: 0.0 }
@@ -524,7 +524,7 @@
                         changed = true;
                     }
                     if (c.id === 'ml2' && (c.name === 'Mercado Livre - Conta 2' || c.commission === 12.0)) {
-                        target.name = 'CPS Soluções';
+                        target.name = 'CPS Soluï¿½ï¿½es';
                         target.commission = 19.5;
                         target.color = '#14B8A6';
                         changed = true;
@@ -2269,6 +2269,41 @@
             const [editingProductFromSales, setEditingProductFromSales] = useState(null);
             const [editingSale, setEditingSale] = useState(null);
 
+            const handleEmitirNfeTiny = async (sale) => {
+                try {
+                    const isMl = sale.channelId.startsWith('ml');
+                    const orderId = isMl ? (sale.id.startsWith('MLB') ? sale.id : sale.externalId || sale.id) : sale.id;
+
+                    if (!confirm(`Deseja emitir a NF-e desta venda via Tiny ERP?\n\nO sistema irÃ¡ pedir ao Tiny para gerar e emitir a nota do pedido ${orderId}.`)) return;
+                    
+                    const btn = document.getElementById('btn-nfe-'+sale.id);
+                    if(btn) { btn.innerHTML = '<div class="w-4 h-4 border-2 border-brand-orange border-t-transparent rounded-full animate-spin"></div>'; btn.disabled = true; }
+
+                    const response = await fetch('/api/tiny/emitir-nfe', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ saleId: sale.id, orderIdEcommerce: orderId })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if(btn) { btn.innerHTML = 'ðŸ–¨ï¸'; btn.disabled = false; }
+
+                    if (!response.ok) throw new Error(data.error || 'Erro desconhecido');
+                    
+                    if (data.link) {
+                        window.open(data.link, '_blank');
+                    } else {
+                        alert("Sucesso, mas o link do PDF nÃ£o foi retornado.");
+                    }
+                } catch (e) {
+                    const btn = document.getElementById('btn-nfe-'+sale.id);
+                    if(btn) { btn.innerHTML = 'ðŸ–¨ï¸'; btn.disabled = false; }
+                    alert('Erro na emissÃ£o: ' + e.message);
+                }
+            };
+    
+
             const formatForInput = (dateStr) => {
                 if (!dateStr) return '';
                 if (dateStr.length <= 10) {
@@ -3974,6 +4009,7 @@
             const [shopeeApiKey, setShopeeApiKey] = useState(credentials?.shopee?.apiKey || '');
             const [siteApiKey, setSiteApiKey] = useState(credentials?.site?.apiKey || '');
             const [siteApiSecret, setSiteApiSecret] = useState(credentials?.site?.apiSecret || '');
+            const [tinyToken, setTinyToken] = useState(credentials?.tiny?.token || '');
 
             const [payloadStr, setPayloadStr] = useState('');
 
@@ -6553,14 +6589,14 @@
                 const handleEditClick = (tx) => { setEditingTxId(tx.id); setEditTxData({ ...tx, date: new Date(tx.date).toISOString().substring(0, 10) }); };
                 const handleCancelEdit = () => { setEditingTxId(null); setEditTxData(null); };
                 const handleSaveEdit = async () => {
-                    if (!editTxData.amount || isNaN(editTxData.amount) || editTxData.amount <= 0 || !editTxData.description) return alert('Preencha os campos obrigatórios');
+                    if (!editTxData.amount || isNaN(editTxData.amount) || editTxData.amount <= 0 || !editTxData.description) return alert('Preencha os campos obrigatï¿½rios');
                     try {
                         const res = await fetch(`/api/transactions/${editingTxId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...editTxData, amount: parseFloat(editTxData.amount) }) });
                         if (res.ok) { const data = await res.json(); setTransactions(transactions.map(t => t.id === editingTxId ? data.transaction : t)); setEditingTxId(null); setEditTxData(null); }
                     } catch (e) { console.error(e); alert('Erro ao atualizar'); }
                 };
                 const handleDeleteTx = async (id) => {
-                    if (!confirm('Deseja realmente apagar esta transação?')) return;
+                    if (!confirm('Deseja realmente apagar esta transaï¿½ï¿½o?')) return;
                     try {
                         const res = await fetch(`/api/transactions/${id}`, { method: 'DELETE' });
                         if (res.ok) { setTransactions(transactions.filter(t => t.id !== id)); }
@@ -6693,7 +6729,7 @@
                                             <th className="pb-3 font-semibold">DescriÃ§Ã£o</th>
                                             <th className="pb-3 font-semibold">Conta</th>
                                             <th className="pb-3 font-semibold text-right w-32">Valor</th>
-                                            <th className="pb-3 font-semibold text-right w-20">Ações</th>
+                                            <th className="pb-3 font-semibold text-right w-20">Aï¿½ï¿½es</th>
                                         </tr>
                                     </thead>
                                     <tbody className="text-sm">
