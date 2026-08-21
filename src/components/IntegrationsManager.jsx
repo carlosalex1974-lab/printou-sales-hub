@@ -13,6 +13,7 @@ export default function IntegrationsManager({ products, channels, integrationLog
     const [shopeeApiKey, setShopeeApiKey] = useState(credentials?.shopee?.apiKey || '');
     const [siteApiKey, setSiteApiKey] = useState(credentials?.site?.apiKey || '');
     const [siteApiSecret, setSiteApiSecret] = useState(credentials?.site?.apiSecret || '');
+    const [tinyToken, setTinyToken] = useState(credentials?.tiny?.token || '');
 
     // Simulação do payload JSON
     const [payloadStr, setPayloadStr] = useState('');
@@ -247,7 +248,7 @@ export default function IntegrationsManager({ products, channels, integrationLog
                         </div>
 
                         <div className="border-t border-white/5 pt-3 space-y-2">
-                            <span className="text-[10px] text-brand-yellow font-extrabold uppercase tracking-widest block">Conta 2: AlucarPrintoustudio3d (Premium)</span>
+                            <span className="text-[10px] text-brand-yellow font-extrabold uppercase tracking-widest block">Conta 2: CPS Solu��es (Premium)</span>
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1">
                                     <span className="text-gray-400 font-bold uppercase text-[9px] block">Client ID</span>
@@ -366,6 +367,35 @@ export default function IntegrationsManager({ products, channels, integrationLog
                     </div>
                 </div>
             </div>
+
+            
+                {/* Tiny ERP Card */}
+                <div className="glass-panel p-6 rounded-2xl border border-white/5 space-y-4 bg-blue-500/5">
+                    <div className="flex justify-between items-center border-b border-white/5 pb-3">
+                        <span className="text-lg font-black text-blue-400 flex items-center gap-2">
+                            <i data-lucide="file-text" className="w-5 h-5"></i>
+                            Tiny ERP (NFe)
+                        </span>
+                        <span className="text-[10px] bg-emerald-500/10 text-emerald-400 font-extrabold px-3 py-1 rounded-full uppercase tracking-wider flex items-center gap-1.5">
+                            Ativo (Produção)
+                        </span>
+                    </div>
+
+                    <div className="space-y-3 text-xs">
+                        <div className="space-y-1">
+                            <span className="text-gray-400 font-bold uppercase block">Como funciona</span>
+                            <p className="text-[10px] text-gray-500">Ao clicar no botão de NFe na aba de Vendas, o sistema irá buscar o pedido no Tiny e emitir a nota fiscal automaticamente, retornando o PDF.</p>
+                        </div>
+                        <div className="space-y-1">
+                            <span className="text-gray-400 font-bold uppercase block">Token da API (V2)</span>
+                            <input
+                                type="password" value={tinyToken} onChange={e => setTinyToken(e.target.value)}
+                                placeholder="Insira o seu token (Ex: e63cb57992...)"
+                                className="w-full bg-brand-darkBg border border-brand-borderBg text-white rounded-lg p-2.5 focus:outline-none focus:border-blue-500 text-xs"
+                            />
+                        </div>
+                    </div>
+                </div>
 
             <div className="flex justify-end">
                 <button

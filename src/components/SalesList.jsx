@@ -5,6 +5,41 @@ export default function SalesListView({ sales, products, channels, setSales, com
     const [selectedStatusFilter, setSelectedStatusFilter] = useState('Todos');
     const [editingSale, setEditingSale] = useState(null);
 
+    const handleEmitirNfeTiny = async (sale) => {
+        try {
+            const isMl = sale.channelId.startsWith('ml');
+            const orderId = isMl ? (sale.id.startsWith('MLB') ? sale.id : sale.externalId || sale.id) : sale.id;
+
+            if (!confirm(`Deseja emitir a NF-e desta venda via Tiny ERP?\n\nO sistema irá pedir ao Tiny para gerar e emitir a nota do pedido ${orderId}.`)) return;
+            
+            const btn = document.getElementById('btn-nfe-'+sale.id);
+            if(btn) { btn.innerHTML = '<div class="w-4 h-4 border-2 border-brand-orange border-t-transparent rounded-full animate-spin"></div>'; btn.disabled = true; }
+
+            const response = await fetch('/api/tiny/emitir-nfe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ saleId: sale.id, orderIdEcommerce: orderId })
+            });
+            
+            const data = await response.json();
+            
+            if(btn) { btn.innerHTML = '🖨️'; btn.disabled = false; }
+
+            if (!response.ok) throw new Error(data.error || 'Erro desconhecido');
+            
+            if (data.link) {
+                window.open(data.link, '_blank');
+            } else {
+                alert("Sucesso, mas o link do PDF não foi retornado.");
+            }
+        } catch (e) {
+            const btn = document.getElementById('btn-nfe-'+sale.id);
+            if(btn) { btn.innerHTML = '🖨️'; btn.disabled = false; }
+            alert('Erro na emissão: ' + e.message);
+        }
+    };
+
+
     const filteredSales = useMemo(() => {
         let result = sales;
         if (selectedStatusFilter !== 'Todos') {
@@ -103,7 +138,17 @@ export default function SalesListView({ sales, products, channels, setSales, com
                                         </span>
                                     </td>
                                     <td className="py-4 text-right whitespace-nowrap">
-                                        <button 
+                                                                                {sale.channelId.startsWith('ml') && (
+                                        <button
+                                            id={`btn-nfe-${sale.id}`}
+                                            onClick={() => handleEmitirNfeTiny(sale)}
+                                            className="p-1.5 hover:bg-blue-500/20 rounded-lg text-gray-400 hover:text-blue-400 mr-1"
+                                            title="Emitir NF-e via Tiny ERP"
+                                        >
+                                            🖨️
+                                        </button>
+                                        )}
+<button 
                                             onClick={() => {
                                                 setEditingSale({...sale});
                                                 window.scrollTo({ top: 0, behavior: 'smooth' });
