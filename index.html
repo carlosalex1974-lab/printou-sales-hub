@@ -2299,7 +2299,7 @@
                 } catch (e) {
                     const btn = document.getElementById('btn-nfe-'+sale.id);
                     if(btn) { btn.innerHTML = '🖨️'; btn.disabled = false; }
-                    alert('Erro na emissão: ' + e.message);
+                    alert('Erro na emissão (Pedido ' + orderId + '): ' + e.message);
                 }
             };
     

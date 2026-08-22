@@ -1953,7 +1953,7 @@ app.post('/api/tiny/emitir-nfe', async (req, res) => {
         
         const dataPesquisa = await resPesquisa.json();
         if (dataPesquisa.retorno.status === 'Erro') {
-            return res.status(400).json({ error: `Erro ao buscar pedido no Tiny: ${dataPesquisa.retorno.erros[0].erro}` });
+            return res.status(400).json({ error: `O pedido ${orderIdEcommerce} não foi encontrado no Tiny. Verifique se ele já foi importado pelo Tiny (Erro: ${dataPesquisa.retorno.erros[0].erro})` });
         }
 
         const pedidos = dataPesquisa.retorno.pedidos;
