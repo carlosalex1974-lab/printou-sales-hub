@@ -5541,28 +5541,32 @@
                                         value={credentials.appSecret} onChange={e => setCredentials({...credentials, appSecret: e.target.value})}
                                     />
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-500 mb-1">Access Token</label>
-                                    <input type="text" 
-                                        className="w-full glass-card border border-brand-borderBg rounded-lg px-4 py-2 focus:border-[#fe0979] focus:outline-none"
-                                        value={credentials.accessToken} onChange={e => setCredentials({...credentials, accessToken: e.target.value})}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-500 mb-1">Shop ID</label>
-                                    <input type="text" 
-                                        className="w-full glass-card border border-brand-borderBg rounded-lg px-4 py-2 focus:border-[#fe0979] focus:outline-none"
-                                        value={credentials.shopId} onChange={e => setCredentials({...credentials, shopId: e.target.value})}
-                                    />
                                 </div>
                                 
-                                <button 
-                                    onClick={handleSaveConfig}
-                                    disabled={isSavingConfig}
-                                    className="w-full mt-6 py-3 bg-[#fe0979] hover:bg-[#d00863] disabled:opacity-50 text-white rounded-xl transition-colors font-bold"
-                                >
-                                    {isSavingConfig ? 'Salvando...' : 'Salvar Credenciais'}
-                                </button>
+                                <div className="pt-4 flex flex-col sm:flex-row gap-4">
+                                    <button 
+                                        onClick={handleSaveConfig}
+                                        disabled={isSavingConfig || !credentials.appKey || !credentials.appSecret}
+                                        className="flex-1 py-3 bg-brand-darkBg border border-white/10 hover:border-brand-orange disabled:opacity-50 text-white rounded-xl transition-colors font-bold"
+                                    >
+                                        {isSavingConfig ? 'Salvando...' : '1. Salvar App Key e Secret'}
+                                    </button>
+                                    
+                                    <button 
+                                        onClick={() => {
+                                            if(!credentials.appKey) {
+                                                alert("Por favor, preencha o App Key primeiro e clique em Salvar.");
+                                                return;
+                                            }
+                                            window.location.href = `/api/channels/tiktok/auth?appKey=${credentials.appKey}`;
+                                        }}
+                                        disabled={!credentials.appKey}
+                                        className="flex-1 py-3 bg-[#fe0979] hover:bg-[#d00863] disabled:opacity-50 text-white rounded-xl transition-colors font-bold flex justify-center items-center gap-2"
+                                    >
+                                        <i data-lucide="external-link" className="w-5 h-5"></i>
+                                        2. Conectar Conta do TikTok
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     )}

@@ -2380,6 +2380,59 @@ app.get('/api/channels/tiktok/products', async (req, res) => {
     }
 });
 
+// Endpoint para iniciar o fluxo OAuth
+app.get('/api/channels/tiktok/auth', async (req, res) => {
+    const appKey = req.query.appKey;
+    if(!appKey) return res.status(400).send("App Key is required");
+    // Redireciona para a página de autorização do TikTok
+    const redirectUrl = `https://services.tiktokshop.com/open/authorize?service_id=${appKey}`;
+    res.redirect(redirectUrl);
+});
+
+// Callback do OAuth do TikTok
+app.get('/api/channels/tiktok/callback', async (req, res) => {
+    const { code } = req.query;
+    if(!code) return res.status(400).send("Authorization code missing.");
+
+    try {
+        const creds = await getTikTokShopCredentials();
+        if(!creds || !creds.appKey || !creds.appSecret) {
+            return res.status(400).send("App Key e App Secret não configurados no sistema. Volte e salve-os primeiro.");
+        }
+
+        const tokenUrl = `https://auth.tiktok-shops.com/api/v2/token/get?app_key=${creds.appKey}&app_secret=${creds.appSecret}&auth_code=${code}&grant_type=authorized_code`;
+        const fetch = (await import('node-fetch')).default || global.fetch;
+        const tokenRes = await fetch(tokenUrl);
+        const tokenData = await tokenRes.json();
+
+        if (tokenData.code === 0 && tokenData.data) {
+            const { access_token, refresh_token, seller_name } = tokenData.data;
+
+            await withDbLock(async () => {
+                await sysCol.updateOne(
+                    { _id: "tiktok_shop_credentials" },
+                    { 
+                        $set: { 
+                            accessToken: access_token,
+                            refreshToken: refresh_token,
+                            sellerName: seller_name,
+                            updatedAt: new Date().toISOString()
+                        }
+                    }
+                );
+            });
+
+            res.send("<html><body><div style='font-family: sans-serif; text-align: center; padding: 50px;'><h2 style='color: #fe0979;'>TikTok Shop Autorizado com Sucesso!</h2><p>Você pode fechar esta aba e voltar para o Printou Sales Hub.</p></div><script>setTimeout(() => window.close(), 3000);</script></body></html>");
+        } else {
+            console.error("TikTok Token Error:", tokenData);
+            res.status(500).send(`Erro ao obter token do TikTok: ${tokenData.message || JSON.stringify(tokenData)}`);
+        }
+    } catch(e) {
+        console.error("Callback Error:", e);
+        res.status(500).send("Erro interno ao processar callback do TikTok.");
+    }
+});
+
 // Endpoint Webhook do TikTok Shop para notificações em tempo real
 app.post('/api/webhooks/tiktokshop', async (req, res) => {
     console.log("=========================================");
