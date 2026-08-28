@@ -3,6 +3,11 @@ import { Shield, Terminal, Send, RefreshCw, Trash2, CheckCircle2 } from 'lucide-
 
 export default function IntegrationsManager({ products, channels, integrationLogs = [], credentials, onWebhookTriggered, onClearLogs }) {
     const [provider, setProvider] = useState('mercadolivre');
+import React, { useState, useEffect } from 'react';
+import { Shield, Terminal, Send, RefreshCw, Trash2, CheckCircle2 } from 'lucide-react';
+
+export default function IntegrationsManager({ products, channels, integrationLogs = [], credentials, onWebhookTriggered, onClearLogs }) {
+    const [provider, setProvider] = useState('mercadolivre');
     
     // Inputs de credenciais
     const [mlClientId, setMlClientId] = useState(credentials?.mercadolivre?.clientId || '');
@@ -11,6 +16,8 @@ export default function IntegrationsManager({ products, channels, integrationLog
     const [ml2ClientSecret, setMl2ClientSecret] = useState(credentials?.mercadolivre2?.clientSecret || '');
     const [shopeeShopId, setShopeeShopId] = useState(credentials?.shopee?.shopId || '');
     const [shopeeApiKey, setShopeeApiKey] = useState(credentials?.shopee?.apiKey || '');
+    const [tiktokAppKey, setTiktokAppKey] = useState(credentials?.tiktok?.appKey || '');
+    const [tiktokAppSecret, setTiktokAppSecret] = useState(credentials?.tiktok?.appSecret || '');
     const [siteApiKey, setSiteApiKey] = useState(credentials?.site?.apiKey || '');
     const [siteApiSecret, setSiteApiSecret] = useState(credentials?.site?.apiSecret || '');
     const [tinyToken, setTinyToken] = useState(credentials?.tiny?.token || '');
@@ -52,9 +59,20 @@ export default function IntegrationsManager({ products, channels, integrationLog
         buyer: 'Marcos de Souza'
     };
 
+    const tiktokTemplate = {
+        order_id: 'TK-2026-9999',
+        channelId: 'tiktok',
+        productId: 'p1',
+        productName: 'Produto TikTok',
+        quantity: 1,
+        grossValue: 55.00,
+        shipping: 0.00,
+        buyer: 'Usuário TikTok'
+    };
+
     // Atualiza o JSON quando troca o provedor
     useEffect(() => {
-        const template = provider === 'mercadolivre' ? mlTemplate : provider === 'shopee' ? shopeeTemplate : siteTemplate;
+        const template = provider === 'mercadolivre' ? mlTemplate : provider === 'shopee' ? shopeeTemplate : provider === 'tiktok' ? tiktokTemplate : siteTemplate;
         setPayloadStr(JSON.stringify(template, null, 4));
     }, [provider]);
 
@@ -121,6 +139,12 @@ export default function IntegrationsManager({ products, channels, integrationLog
                         apiKey: siteApiKey,
                         apiSecret: siteApiSecret,
                         webhookUrl: `${window.location.origin}/api/webhooks/site`,
+                        status: 'Sincronizado'
+                    },
+                    tiktok: {
+                        appKey: tiktokAppKey,
+                        appSecret: tiktokAppSecret,
+                        webhookUrl: `${window.location.origin}/api/webhooks/tiktok`,
                         status: 'Sincronizado'
                     }
                 };
@@ -248,7 +272,7 @@ export default function IntegrationsManager({ products, channels, integrationLog
                         </div>
 
                         <div className="border-t border-white/5 pt-3 space-y-2">
-                            <span className="text-[10px] text-brand-yellow font-extrabold uppercase tracking-widest block">Conta 2: CPS Solu��es (Premium)</span>
+                            <span className="text-[10px] text-brand-yellow font-extrabold uppercase tracking-widest block">Conta 2: CPS Soluções (Premium)</span>
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1">
                                     <span className="text-gray-400 font-bold uppercase text-[9px] block">Client ID</span>
@@ -327,11 +351,11 @@ export default function IntegrationsManager({ products, channels, integrationLog
                     </div>
                 </div>
 
-                {/* Site Próprio Card */}
+                {/* TikTok Shop Card */}
                 <div className="glass-panel p-6 rounded-2xl border border-white/5 space-y-4">
                     <div className="flex justify-between items-center border-b border-white/5 pb-3">
-                        <span className="text-lg font-black text-[#0088FF] flex items-center gap-2">
-                            Site Próprio API
+                        <span className="text-lg font-black text-white flex items-center gap-2">
+                            <span className="bg-gradient-to-r from-[#00f2fe] to-[#fe0979] text-transparent bg-clip-text">TikTok API</span>
                         </span>
                         <span className="text-[10px] bg-emerald-500/10 text-emerald-400 font-extrabold px-3 py-1 rounded-full uppercase tracking-wider flex items-center gap-1.5">
                             <CheckCircle2 className="w-3.5 h-3.5" />
@@ -343,22 +367,22 @@ export default function IntegrationsManager({ products, channels, integrationLog
                         <div className="space-y-1">
                             <span className="text-gray-400 font-bold uppercase block">URL de Notificação (Webhook)</span>
                             <code className="bg-[#121215] text-brand-orange p-2 rounded-lg block overflow-x-auto text-[10px]">
-                                http://sua-url-online.com/api/webhooks/site
+                                http://sua-url-online.com/api/webhooks/tiktok
                             </code>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1">
-                                <span className="text-gray-400 font-bold uppercase">API Key / Token</span>
+                                <span className="text-gray-400 font-bold uppercase">App Key</span>
                                 <input
-                                    type="text" value={siteApiKey} onChange={e => setSiteApiKey(e.target.value)}
-                                    placeholder="Ex: wp_oauth_..."
+                                    type="text" value={tiktokAppKey} onChange={e => setTiktokAppKey(e.target.value)}
+                                    placeholder="Ex: 6dfg..."
                                     className="w-full bg-brand-darkBg border border-brand-borderBg text-white rounded-lg p-2.5 focus:outline-none focus:border-brand-orange text-xs"
                                 />
                             </div>
                             <div className="space-y-1">
-                                <span className="text-gray-400 font-bold uppercase">API Secret / Hash</span>
+                                <span className="text-gray-400 font-bold uppercase">App Secret</span>
                                 <input
-                                    type="password" value={siteApiSecret} onChange={e => setSiteApiSecret(e.target.value)}
+                                    type="password" value={tiktokAppSecret} onChange={e => setTiktokAppSecret(e.target.value)}
                                     placeholder="••••••••••••"
                                     className="w-full bg-brand-darkBg border border-brand-borderBg text-white rounded-lg p-2.5 focus:outline-none focus:border-brand-orange text-xs"
                                 />
@@ -368,34 +392,33 @@ export default function IntegrationsManager({ products, channels, integrationLog
                 </div>
             </div>
 
-            
-                {/* Tiny ERP Card */}
-                <div className="glass-panel p-6 rounded-2xl border border-white/5 space-y-4 bg-blue-500/5">
-                    <div className="flex justify-between items-center border-b border-white/5 pb-3">
-                        <span className="text-lg font-black text-blue-400 flex items-center gap-2">
-                            <i data-lucide="file-text" className="w-5 h-5"></i>
-                            Tiny ERP (NFe)
-                        </span>
-                        <span className="text-[10px] bg-emerald-500/10 text-emerald-400 font-extrabold px-3 py-1 rounded-full uppercase tracking-wider flex items-center gap-1.5">
-                            Ativo (Produção)
-                        </span>
-                    </div>
+            {/* Tiny ERP Card */}
+            <div className="glass-panel p-6 rounded-2xl border border-white/5 space-y-4 bg-blue-500/5">
+                <div className="flex justify-between items-center border-b border-white/5 pb-3">
+                    <span className="text-lg font-black text-blue-400 flex items-center gap-2">
+                        <i data-lucide="file-text" className="w-5 h-5"></i>
+                        Tiny ERP (NFe)
+                    </span>
+                    <span className="text-[10px] bg-emerald-500/10 text-emerald-400 font-extrabold px-3 py-1 rounded-full uppercase tracking-wider flex items-center gap-1.5">
+                        Ativo (Produção)
+                    </span>
+                </div>
 
-                    <div className="space-y-3 text-xs">
-                        <div className="space-y-1">
-                            <span className="text-gray-400 font-bold uppercase block">Como funciona</span>
-                            <p className="text-[10px] text-gray-500">Ao clicar no botão de NFe na aba de Vendas, o sistema irá buscar o pedido no Tiny e emitir a nota fiscal automaticamente, retornando o PDF.</p>
-                        </div>
-                        <div className="space-y-1">
-                            <span className="text-gray-400 font-bold uppercase block">Token da API (V2)</span>
-                            <input
-                                type="password" value={tinyToken} onChange={e => setTinyToken(e.target.value)}
-                                placeholder="Insira o seu token (Ex: e63cb57992...)"
-                                className="w-full bg-brand-darkBg border border-brand-borderBg text-white rounded-lg p-2.5 focus:outline-none focus:border-blue-500 text-xs"
-                            />
-                        </div>
+                <div className="space-y-3 text-xs">
+                    <div className="space-y-1">
+                        <span className="text-gray-400 font-bold uppercase block">Como funciona</span>
+                        <p className="text-[10px] text-gray-500">Ao clicar no botão de NFe na aba de Vendas, o sistema irá buscar o pedido no Tiny e emitir a nota fiscal automaticamente, retornando o PDF.</p>
+                    </div>
+                    <div className="space-y-1">
+                        <span className="text-gray-400 font-bold uppercase block">Token da API (V2)</span>
+                        <input
+                            type="password" value={tinyToken} onChange={e => setTinyToken(e.target.value)}
+                            placeholder="Insira o seu token (Ex: e63cb57992...)"
+                            className="w-full bg-brand-darkBg border border-brand-borderBg text-white rounded-lg p-2.5 focus:outline-none focus:border-blue-500 text-xs"
+                        />
                     </div>
                 </div>
+            </div>
 
             <div className="flex justify-end">
                 <button
@@ -438,12 +461,24 @@ export default function IntegrationsManager({ products, channels, integrationLog
                                 >
                                     Site Próprio
                                 </button>
+                                <button
+                                    onClick={() => setProvider('tiktok')}
+                                    className={`flex-1 py-2 px-2 rounded-lg font-bold text-[10px] uppercase transition-all ${provider === 'tiktok' ? 'bg-brand-orange text-black' : 'text-gray-400 hover:text-white'}`}
+                                >
+                                    TikTok Shop
+                                </button>
                             </div>
                         </div>
 
                         <div>
                             <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Payload Simulado (JSON)</label>
                             <textarea
+                                value={payloadStr}
+                                onChange={e => setPayloadStr(e.target.value)}
+                                rows={8}
+                                className="w-full bg-[#121215] text-emerald-400 font-mono text-[11px] rounded-xl p-3 border border-white/5 focus:outline-none focus:border-brand-orange"
+                            />
+                        </div>
                                 value={payloadStr}
                                 onChange={e => setPayloadStr(e.target.value)}
                                 rows={8}

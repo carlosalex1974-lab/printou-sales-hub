@@ -53,6 +53,61 @@ app.use(express.json({ limit: '50mb' }));
 
 // Servir arquivos estáticos do React em produção
 app.use(express.static(path.join(__dirname, 'dist')));
+import express from 'express';
+import cors from 'cors';
+import fs from 'fs';
+import { MongoClient } from 'mongodb';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const app = express();
+const PORT = process.env.PORT || 3001;
+const DB_DIR = path.join(__dirname, 'data');
+const DB_FILE = path.join(DB_DIR, 'db.json');
+
+// Trava em memória para evitar concorrência/duplicação de webhooks
+const activeLocks = new Set();
+
+const uri = "mongodb://carlosalex1974_db_user:kPMDLXtyBwR4NUtd@ac-nbjwzq9-shard-00-00.zn8nyjr.mongodb.net:27017,ac-nbjwzq9-shard-00-01.zn8nyjr.mongodb.net:27017,ac-nbjwzq9-shard-00-02.zn8nyjr.mongodb.net:27017/printou?ssl=true&replicaSet=atlas-ph5ht3-shard-0&authSource=admin&retryWrites=true&w=majority";
+const client = new MongoClient(uri);
+let sysCol;
+let dbMutex = Promise.resolve(); // Global mutex for DB operations
+
+// Wrapper seguro para ler, modificar e salvar o banco de dados atomicamente
+async function withDbLock(callback) {
+    const release = await new Promise(resolve => {
+        const next = dbMutex.then(() => resolve);
+        dbMutex = next.catch(() => resolve);
+    });
+    try {
+        await callback();
+    } finally {
+        release();
+    }
+}
+
+async function connectDB() {
+    try {
+        await client.connect();
+        sysCol = client.db("printou").collection("system");
+        console.log("✅ Conectado ao MongoDB Atlas!");
+    } catch (e) {
+        console.error("❌ Falha ao conectar ao MongoDB:", e.message);
+        console.log("🔄 Tentando reconectar em 10 segundos...");
+        setTimeout(connectDB, 10000);
+    }
+}
+connectDB();
+
+
+app.use(cors());
+app.use(express.json({ limit: '50mb' }));
+
+// Servir arquivos estáticos do React em produção
+app.use(express.static(path.join(__dirname, 'dist')));
 // Servir a pasta de imagens assets diretamente
 app.use('/assets', express.static(path.join(__dirname, 'assets')));
 
@@ -63,6 +118,7 @@ const DEFAULT_DB = {
         { id: 'ml2', name: 'AlucarPrintoustudio3d (Premium)', commission: 19.5, fixedFee: 6.0, color: '#14B8A6', hasFreeShippingThreshold: true, freeShippingThreshold: 79.0, defaultSellerShippingCost: 19.90, defaultBelowThresholdShippingCost: 0.0 },
         { id: 'shopee', name: 'Shopee', commission: 14.0, fixedFee: 3.0, color: '#EE4D2D', hasFreeShippingThreshold: false, freeShippingThreshold: 0, defaultSellerShippingCost: 0.0, defaultBelowThresholdShippingCost: 0.0 },
         { id: 'site', name: 'Site Próprio', commission: 3.99, fixedFee: 0.5, color: '#0088FF', hasFreeShippingThreshold: false, freeShippingThreshold: 0, defaultSellerShippingCost: 0.0, defaultBelowThresholdShippingCost: 0.0 },
+        { id: 'tiktok', name: 'TikTok Shop', commission: 10.0, fixedFee: 3.0, color: '#fe0979', hasFreeShippingThreshold: false, freeShippingThreshold: 0, defaultSellerShippingCost: 0.0, defaultBelowThresholdShippingCost: 0.0 },
         { id: 'direta', name: 'Venda Direta / Pix', commission: 0.0, fixedFee: 0.0, color: '#30D158', hasFreeShippingThreshold: false, freeShippingThreshold: 0, defaultSellerShippingCost: 0.0, defaultBelowThresholdShippingCost: 0.0 }
     ],
     suppliers: [],
@@ -81,6 +137,7 @@ const DEFAULT_DB = {
         mercadolivre: { clientId: '', clientSecret: '', webhookUrl: 'http://localhost:3001/api/webhooks/mercadolivre', status: 'Não Sincronizado' },
         shopee: { shopId: '', apiKey: '', webhookUrl: 'http://localhost:3001/api/webhooks/shopee', status: 'Não Sincronizado' },
         site: { apiKey: '', apiSecret: '', webhookUrl: 'http://localhost:3001/api/webhooks/site', status: 'Não Sincronizado' },
+        tiktok: { appKey: '', appSecret: '', webhookUrl: 'http://localhost:3001/api/webhooks/tiktok', status: 'Não Sincronizado' },
         facebook: { accessToken: '', pageId: '1117637594770324', businessId: '1550133536629313', catalogId: '', status: 'Não Sincronizado' },
         tiny: { token: '', status: 'Não Sincronizado' }
     },
@@ -130,6 +187,10 @@ async function readDb() {
     db.credentials.site.apiKey = process.env.SITE_API_KEY || db.credentials.site.apiKey || '';
     db.credentials.site.apiSecret = process.env.SITE_API_SECRET || db.credentials.site.apiSecret || '';
 
+    db.credentials.tiktok = db.credentials.tiktok || {};
+    db.credentials.tiktok.appKey = process.env.TIKTOK_APP_KEY || db.credentials.tiktok.appKey || '';
+    db.credentials.tiktok.appSecret = process.env.TIKTOK_APP_SECRET || db.credentials.tiktok.appSecret || '';
+
     db.credentials.facebook = db.credentials.facebook || {};
     db.credentials.facebook.accessToken = process.env.FB_ACCESS_TOKEN || db.credentials.facebook.accessToken || '';
     db.credentials.facebook.pageId = process.env.FB_PAGE_ID || db.credentials.facebook.pageId || '1117637594770324';
@@ -140,6 +201,7 @@ async function readDb() {
     if (db.credentials.mercadolivre2.clientId && db.credentials.mercadolivre2.clientSecret) db.credentials.mercadolivre2.status = 'Sincronizado';
     if (db.credentials.shopee.shopId && db.credentials.shopee.apiKey) db.credentials.shopee.status = 'Sincronizado';
     if (db.credentials.site.apiKey && db.credentials.site.apiSecret) db.credentials.site.status = 'Sincronizado';
+    if (db.credentials.tiktok && db.credentials.tiktok.appKey && db.credentials.tiktok.appSecret) db.credentials.tiktok.status = 'Sincronizado';
     if (db.credentials.facebook.accessToken) db.credentials.facebook.status = 'Sincronizado';
     else db.credentials.facebook.status = 'Nao Sincronizado';
 
@@ -573,6 +635,8 @@ app.post('/api/webhooks/:provider', async (req, res) => {
         }
     } else if (provider === 'site') {
         orderIdCandidate = payload.name || (payload.id ? String(payload.id) : null);
+    } else if (provider === 'tiktok') {
+        orderIdCandidate = payload.order_id || null;
     } else {
         orderIdCandidate = payload.order_id || payload.order_sn || null;
     }
@@ -658,151 +722,6 @@ app.post('/api/webhooks/:provider', async (req, res) => {
             }
 
             // Registra no log do sistema
-            db.integrationLogs = db.integrationLogs || [];
-            db.integrationLogs.push({
-                id: `log_webhook_item_${Date.now()}`,
-                timestamp: new Date().toLocaleTimeString('pt-BR'),
-                type: 'info',
-                message: logMsg
-            });
-
-            await saveDb(db);
-            console.log(logMsg);
-            
-            return res.json({ success: true, message: 'Item processado com sucesso.' });
-        }
-        
-        let orderId;
-        let channelId;
-        let productId;
-        let productName;
-        let quantity;
-        let grossValue;
-        let shipping;
-        let buyer;
-        let isRealMLOrder = false;
-        let saleDate = new Date().toISOString();
-
-        // Trata webhook oficial do Mercado Livre
-        if (provider === 'mercadolivre' && payload.resource && payload.topic === 'orders') {
-            isRealMLOrder = true;
-            const resourceId = payload.resource.split('/').pop();
-            const mlUserId = String(payload.user_id);
-            
-            // Identifica qual conta do Mercado Livre disparou
-            let accountKey = 'mercadolivre';
-            channelId = 'ml1'; // Printou Hub Premium
-            
-            if (db.credentials.mercadolivre2 && String(db.credentials.mercadolivre2.userId) === mlUserId) {
-                accountKey = 'mercadolivre2';
-                channelId = 'ml2'; // Alucar Premium
-            } else if (db.credentials.mercadolivre && String(db.credentials.mercadolivre.userId) === mlUserId) {
-                accountKey = 'mercadolivre';
-                channelId = 'ml1';
-            }
-            
-            const accessToken = await getValidAccessToken(accountKey, db);
-            if (!accessToken) {
-                throw new Error(`Não foi possível obter Token de Acesso válido para a conta ${accountKey}.`);
-            }
-            
-            // Busca detalhes da venda na API do Mercado Livre
-            const orderRes = await fetch(`https://api.mercadolibre.com/orders/${resourceId}`, {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
-            });
-            
-            if (!orderRes.ok) {
-                const errText = await orderRes.text();
-                throw new Error(`Erro ao buscar pedido ${resourceId} na API do ML: ${errText}`);
-            }
-            
-            const orderData = await orderRes.json();
-            saleDate = orderData.date_closed || orderData.date_created || saleDate;
-            orderId = String(orderData.id);
-            buyer = `${orderData.buyer.first_name || ''} ${orderData.buyer.last_name || ''}`.trim() || orderData.buyer.nickname || 'Comprador ML';
-            grossValue = orderData.total_amount;
-            
-            // Busca custos de frete se houver
-            shipping = 0.0;
-            if (orderData.shipping && orderData.shipping.id) {
-                try {
-                    const shipRes = await fetch(`https://api.mercadolibre.com/shipments/${orderData.shipping.id}`, {
-                        headers: { 'Authorization': `Bearer ${accessToken}` }
-                    });
-                    if (shipRes.ok) {
-                        const shipData = await shipRes.json();
-                        // Se o frete foi grátis para o comprador (custo 0), o custo cobrado do vendedor fica em base_cost ou cost
-                        if (orderData.shipping.free_shipping || (shipData.shipping_option && shipData.shipping_option.cost === 0)) {
-                            shipping = parseFloat(shipData.base_cost) || parseFloat(shipData.cost) || 0.0;
-                        } else if (shipData.shipping_option && shipData.shipping_option.cost !== undefined) {
-                            shipping = parseFloat(shipData.shipping_option.cost);
-                        }
-                    }
-                } catch (shipErr) {
-                    console.warn("Não foi possível buscar custos de envio detalhados:", shipErr);
-                }
-            }
-
-            // Fallback para regras do canal cadastradas se o frete for importado como zero
-            if (shipping === 0) {
-                const chan = db.channels.find(c => c.id === channelId);
-                if (chan) {
-                    if (chan.hasFreeShippingThreshold) {
-                        if (grossValue >= chan.freeShippingThreshold) {
-                            shipping = chan.defaultSellerShippingCost || 0.0;
-                        } else {
-                            shipping = chan.defaultBelowThresholdShippingCost || 0.0;
-                        }
-                    } else {
-                        shipping = chan.defaultSellerShippingCost || 0.0;
-                    }
-                }
-            }
-            
-            const firstItem = orderData.order_items[0];
-            if (firstItem) {
-                productId = firstItem.item.id;
-                productName = firstItem.item.title;
-                quantity = firstItem.quantity;
-            } else {
-                productId = 'p1';
-                productName = 'Produto Mercado Livre';
-                quantity = 1;
-            }
-        } else if (provider === 'site') {
-            // Webhook do site próprio (Shopify)
-            // Se for Shopify, o ID vem em payload.name (ex: "#1001") ou payload.id
-            orderId = payload.name || (payload.id ? String(payload.id) : `shop_${Date.now().toString().slice(-4)}`);
-            channelId = 'site';
-            
-            const firstItem = payload.line_items && payload.line_items[0];
-            if (firstItem) {
-                productId = String(firstItem.variant_id || firstItem.product_id || 'p3');
-                productName = firstItem.name || firstItem.title || 'Produto Site';
-                quantity = parseInt(firstItem.quantity) || 1;
-            } else {
-                productId = payload.productId || 'p3';
-                productName = payload.productName || 'Produto Shopify';
-                quantity = parseInt(payload.quantity) || 1;
-            }
-            
-            grossValue = parseFloat(payload.total_price) || parseFloat(payload.grossValue) || 49.90;
-            shipping = payload.shipping_lines && payload.shipping_lines[0] ? parseFloat(payload.shipping_lines[0].price) : (parseFloat(payload.shipping) || 0.0);
-            
-            if (payload.customer) {
-                buyer = `${payload.customer.first_name || ''} ${payload.customer.last_name || ''}`.trim() || 'Cliente Shopify';
-            } else {
-                buyer = payload.buyer || 'Cliente Shopify';
-            }
-            saleDate = payload.created_at || saleDate;
-        } else {
-            // Lógica de simulação antiga/Shopee
-            orderId = payload.order_id || payload.order_sn || `int_${Date.now().toString().slice(-4)}`;
-            channelId = payload.channelId || (provider === 'mercadolivre' ? 'ml2' : provider === 'shopee' ? 'shopee' : 'site');
-            productId = payload.productId || 'p1';
-            productName = payload.productName || `Produto Simulado ${productId}`;
-            quantity = parseInt(payload.quantity) || 1;
-            grossValue = parseFloat(payload.grossValue) || 49.90;
             shipping = parseFloat(payload.shipping) || 0.0;
             buyer = payload.buyer || 'Cliente Integrado';
             saleDate = payload.date || saleDate;
