@@ -1134,7 +1134,7 @@
                             <FacebookMarketplaceView />
                         )}
                         {activeTab === 'tiktok' && (
-                            <TikTokShopView />
+                            <TikTokShopView products={products} />
                         )}
 
                         {activeTab === 'reports' && (
@@ -5392,7 +5392,7 @@
         // --- ABA EXTRA: FACEBOOK MARKETPLACE AGENT ---
         
         // --- ABA EXTRA: TIKTOK SHOP AGENT ---
-        function TikTokShopView() {
+        function TikTokShopView({ products: globalProducts = [] }) {
             const [activeTab, setActiveTab] = React.useState('catalog'); 
             const [products, setProducts] = React.useState([]);
             
@@ -5411,19 +5411,12 @@
                 }
             }, [activeTab]);
 
-            // Simula carga de produtos
+            // Sincroniza os produtos da loja
             React.useEffect(() => {
-                const loadProds = () => {
-                    const saved = localStorage.getItem('printou_products');
-                    if (saved) {
-                        try {
-                            const parsed = JSON.parse(saved);
-                            setProducts(parsed.map(p => ({ ...p, isPublishedOnTikTok: false })));
-                        } catch(e) {}
-                    }
-                };
-                loadProds();
-            }, []);
+                if (globalProducts && globalProducts.length > 0) {
+                    setProducts(globalProducts.map(p => ({ ...p, isPublishedOnTikTok: false })));
+                }
+            }, [globalProducts]);
 
             const handlePublishToTikTok = (prodId) => {
                 setProducts(prev => prev.map(p => 
@@ -5500,7 +5493,7 @@
                                 {products.map(prod => (
                                     <div key={prod.id} className="bg-black/20 border border-white/5 rounded-xl p-4 flex flex-col justify-between">
                                         <div>
-                                            <h4 className="text-white font-medium mb-1 truncate">{prod.name}</h4>
+                                            <h4 className="text-white font-medium mb-1 truncate" style={{ color: '#ffffff' }}>{prod.name}</h4>
                                             <p className="text-[#fe0979] font-bold">R$ {prod.price}</p>
                                             <p className="text-xs text-gray-500 mt-2">Estoque: {prod.stock || 0}</p>
                                         </div>
