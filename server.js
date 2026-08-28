@@ -2049,6 +2049,156 @@ app.post('/api/tiny/emitir-nfe', async (req, res) => {
     }
 });
 
+// Função para buscar credenciais do TikTok Shop no banco
+async function getTikTokShopCredentials() {
+    try {
+        const sysDoc = await sysCol.findOne({ _id: "tiktok_shop_credentials" });
+        return sysDoc || null;
+    } catch (e) {
+        console.error("Erro ao buscar credenciais do TikTok Shop:", e);
+        return null;
+    }
+}
+
+// Endpoint para receber configurações e credenciais do frontend
+app.post('/api/channels/tiktok/config', async (req, res) => {
+    try {
+        const { appKey, appSecret, accessToken, shopId } = req.body;
+        
+        await withDbLock(async () => {
+            await sysCol.updateOne(
+                { _id: "tiktok_shop_credentials" },
+                { 
+                    $set: { 
+                        appKey,
+                        appSecret,
+                        accessToken,
+                        shopId,
+                        updatedAt: new Date().toISOString()
+                    }
+                },
+                { upsert: true }
+            );
+        });
+
+        res.json({ success: true, message: "Credenciais do TikTok Shop salvas com sucesso." });
+    } catch (error) {
+        console.error("Erro ao salvar config do TikTok Shop:", error);
+        res.status(500).json({ success: false, error: "Erro interno ao salvar configurações." });
+    }
+});
+
+// Endpoint base para listar produtos no TikTok Shop (Simulação/Preparo)
+app.get('/api/channels/tiktok/products', async (req, res) => {
+    try {
+        const creds = await getTikTokShopCredentials();
+        if (!creds || !creds.appKey) {
+            return res.status(400).json({ success: false, error: "Credenciais do TikTok Shop não configuradas." });
+        }
+        
+        // Em produção, isso faria uma chamada para a API do TikTok.
+        res.json({ success: true, data: [] });
+    } catch (error) {
+        console.error("Erro ao buscar produtos no TikTok:", error);
+        res.status(500).json({ success: false, error: "Erro ao comunicar com TikTok Shop." });
+    }
+});
+
+// Endpoint para iniciar o fluxo OAuth
+app.get('/api/channels/tiktok/auth', async (req, res) => {
+    const appKey = req.query.appKey;
+    if(!appKey) return res.status(400).send("App Key is required");
+    // Redireciona para a página de autorização do TikTok
+    const redirectUrl = `https://services.tiktokshop.com/open/authorize?service_id=${appKey}`;
+    res.redirect(redirectUrl);
+});
+
+// Callback do OAuth do TikTok
+app.get('/api/channels/tiktok/callback', async (req, res) => {
+    const { code } = req.query;
+    if(!code) return res.status(400).send("Authorization code missing.");
+
+    try {
+        const creds = await getTikTokShopCredentials();
+        if(!creds || !creds.appKey || !creds.appSecret) {
+            return res.status(400).send("App Key e App Secret não configurados no sistema. Volte e salve-os primeiro.");
+        }
+
+        const tokenUrl = `https://auth.tiktok-shops.com/api/v2/token/get?app_key=${creds.appKey}&app_secret=${creds.appSecret}&auth_code=${code}&grant_type=authorized_code`;
+        const fetch = (await import('node-fetch')).default || global.fetch;
+        const tokenRes = await fetch(tokenUrl);
+        const tokenData = await tokenRes.json();
+
+        if (tokenData.code === 0 && tokenData.data) {
+            const { access_token, refresh_token, seller_name } = tokenData.data;
+
+            await withDbLock(async () => {
+                await sysCol.updateOne(
+                    { _id: "tiktok_shop_credentials" },
+                    { 
+                        $set: { 
+                            accessToken: access_token,
+                            refreshToken: refresh_token,
+                            sellerName: seller_name,
+                            updatedAt: new Date().toISOString()
+                        }
+                    }
+                );
+            });
+
+            res.send("<html><body><div style='font-family: sans-serif; text-align: center; padding: 50px;'><h2 style='color: #fe0979;'>TikTok Shop Autorizado com Sucesso!</h2><p>Você pode fechar esta aba e voltar para o Printou Sales Hub.</p></div><script>setTimeout(() => window.close(), 3000);</script></body></html>");
+        } else {
+            console.error("TikTok Token Error:", tokenData);
+            res.status(500).send(`Erro ao obter token do TikTok: ${tokenData.message || JSON.stringify(tokenData)}`);
+        }
+    } catch(e) {
+        console.error("Callback Error:", e);
+        res.status(500).send("Erro interno ao processar callback do TikTok.");
+    }
+});
+
+// Endpoint Webhook do TikTok Shop para notificações em tempo real
+app.post('/api/webhooks/tiktokshop', async (req, res) => {
+    console.log("=========================================");
+    console.log("🔔 [TIKTOK WEBHOOK] NOTIFICAÇÃO RECEBIDA");
+    console.log("Headers:", req.headers);
+    console.log("Body:", JSON.stringify(req.body, null, 2));
+    
+    // TikTok requer que você valide e responda 200 OK rapidamente
+    res.status(200).json({ success: true });
+});
+
+
+app.listen(PORT, () => {
+    console.log(`\n======================================================`);
+    console.log(`🚀 Printou Hub - Servidor Ativo!`);
+    console.log(`   Endereço: http://localhost:${PORT}`);
+    console.log(`   Webhook ML: http://localhost:${PORT}/api/webhooks/mercadolivre`);
+    console.log(`   Dados salvos em: ${DB_FILE}`);
+    console.log(`   🔄 Auto-Sync ML: ativo (a cada ${POLL_INTERVAL_MS / 1000}s)`);
+    console.log(`======================================================\n`);
+
+    // Primeira sincronização 10 segundos após iniciar
+    setTimeout(() => {
+        console.log('[AUTO-SYNC] Executando primeira sincronização...');
+        pollMercadoLivreOrders();
+        pollCancelledOrders();
+    }, 10000);
+
+    // Poller contínuo a cada 3 minutos
+    setInterval(() => {
+        pollMercadoLivreOrders();
+    }, POLL_INTERVAL_MS);
+
+    // Verifica cancelamentos a cada 10 minutos
+    setInterval(() => {
+        pollCancelledOrders();
+    }, 10 * 60 * 1000);
+});
+
+
+
+
 app.use((req, res) => {
     res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
@@ -2324,153 +2474,3 @@ async function pollCancelledOrders() {
 // ==========================================
 // TIKTOK SHOP INTEGRATION
 // ==========================================
-
-// Função para buscar credenciais do TikTok Shop no banco
-async function getTikTokShopCredentials() {
-    try {
-        const sysDoc = await sysCol.findOne({ _id: "tiktok_shop_credentials" });
-        return sysDoc || null;
-    } catch (e) {
-        console.error("Erro ao buscar credenciais do TikTok Shop:", e);
-        return null;
-    }
-}
-
-// Endpoint para receber configurações e credenciais do frontend
-app.post('/api/channels/tiktok/config', async (req, res) => {
-    try {
-        const { appKey, appSecret, accessToken, shopId } = req.body;
-        
-        await withDbLock(async () => {
-            await sysCol.updateOne(
-                { _id: "tiktok_shop_credentials" },
-                { 
-                    $set: { 
-                        appKey,
-                        appSecret,
-                        accessToken,
-                        shopId,
-                        updatedAt: new Date().toISOString()
-                    }
-                },
-                { upsert: true }
-            );
-        });
-
-        res.json({ success: true, message: "Credenciais do TikTok Shop salvas com sucesso." });
-    } catch (error) {
-        console.error("Erro ao salvar config do TikTok Shop:", error);
-        res.status(500).json({ success: false, error: "Erro interno ao salvar configurações." });
-    }
-});
-
-// Endpoint base para listar produtos no TikTok Shop (Simulação/Preparo)
-app.get('/api/channels/tiktok/products', async (req, res) => {
-    try {
-        const creds = await getTikTokShopCredentials();
-        if (!creds || !creds.appKey) {
-            return res.status(400).json({ success: false, error: "Credenciais do TikTok Shop não configuradas." });
-        }
-        
-        // Em produção, isso faria uma chamada para a API do TikTok.
-        res.json({ success: true, data: [] });
-    } catch (error) {
-        console.error("Erro ao buscar produtos no TikTok:", error);
-        res.status(500).json({ success: false, error: "Erro ao comunicar com TikTok Shop." });
-    }
-});
-
-// Endpoint para iniciar o fluxo OAuth
-app.get('/api/channels/tiktok/auth', async (req, res) => {
-    const appKey = req.query.appKey;
-    if(!appKey) return res.status(400).send("App Key is required");
-    // Redireciona para a página de autorização do TikTok
-    const redirectUrl = `https://services.tiktokshop.com/open/authorize?service_id=${appKey}`;
-    res.redirect(redirectUrl);
-});
-
-// Callback do OAuth do TikTok
-app.get('/api/channels/tiktok/callback', async (req, res) => {
-    const { code } = req.query;
-    if(!code) return res.status(400).send("Authorization code missing.");
-
-    try {
-        const creds = await getTikTokShopCredentials();
-        if(!creds || !creds.appKey || !creds.appSecret) {
-            return res.status(400).send("App Key e App Secret não configurados no sistema. Volte e salve-os primeiro.");
-        }
-
-        const tokenUrl = `https://auth.tiktok-shops.com/api/v2/token/get?app_key=${creds.appKey}&app_secret=${creds.appSecret}&auth_code=${code}&grant_type=authorized_code`;
-        const fetch = (await import('node-fetch')).default || global.fetch;
-        const tokenRes = await fetch(tokenUrl);
-        const tokenData = await tokenRes.json();
-
-        if (tokenData.code === 0 && tokenData.data) {
-            const { access_token, refresh_token, seller_name } = tokenData.data;
-
-            await withDbLock(async () => {
-                await sysCol.updateOne(
-                    { _id: "tiktok_shop_credentials" },
-                    { 
-                        $set: { 
-                            accessToken: access_token,
-                            refreshToken: refresh_token,
-                            sellerName: seller_name,
-                            updatedAt: new Date().toISOString()
-                        }
-                    }
-                );
-            });
-
-            res.send("<html><body><div style='font-family: sans-serif; text-align: center; padding: 50px;'><h2 style='color: #fe0979;'>TikTok Shop Autorizado com Sucesso!</h2><p>Você pode fechar esta aba e voltar para o Printou Sales Hub.</p></div><script>setTimeout(() => window.close(), 3000);</script></body></html>");
-        } else {
-            console.error("TikTok Token Error:", tokenData);
-            res.status(500).send(`Erro ao obter token do TikTok: ${tokenData.message || JSON.stringify(tokenData)}`);
-        }
-    } catch(e) {
-        console.error("Callback Error:", e);
-        res.status(500).send("Erro interno ao processar callback do TikTok.");
-    }
-});
-
-// Endpoint Webhook do TikTok Shop para notificações em tempo real
-app.post('/api/webhooks/tiktokshop', async (req, res) => {
-    console.log("=========================================");
-    console.log("🔔 [TIKTOK WEBHOOK] NOTIFICAÇÃO RECEBIDA");
-    console.log("Headers:", req.headers);
-    console.log("Body:", JSON.stringify(req.body, null, 2));
-    
-    // TikTok requer que você valide e responda 200 OK rapidamente
-    res.status(200).json({ success: true });
-});
-
-
-app.listen(PORT, () => {
-    console.log(`\n======================================================`);
-    console.log(`🚀 Printou Hub - Servidor Ativo!`);
-    console.log(`   Endereço: http://localhost:${PORT}`);
-    console.log(`   Webhook ML: http://localhost:${PORT}/api/webhooks/mercadolivre`);
-    console.log(`   Dados salvos em: ${DB_FILE}`);
-    console.log(`   🔄 Auto-Sync ML: ativo (a cada ${POLL_INTERVAL_MS / 1000}s)`);
-    console.log(`======================================================\n`);
-
-    // Primeira sincronização 10 segundos após iniciar
-    setTimeout(() => {
-        console.log('[AUTO-SYNC] Executando primeira sincronização...');
-        pollMercadoLivreOrders();
-        pollCancelledOrders();
-    }, 10000);
-
-    // Poller contínuo a cada 3 minutos
-    setInterval(() => {
-        pollMercadoLivreOrders();
-    }, POLL_INTERVAL_MS);
-
-    // Verifica cancelamentos a cada 10 minutos
-    setInterval(() => {
-        pollCancelledOrders();
-    }, 10 * 60 * 1000);
-});
-
-
-
