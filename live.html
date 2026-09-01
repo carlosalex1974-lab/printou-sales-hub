@@ -263,7 +263,7 @@
         // --- DADOS INICIAIS DO LOCALSTORAGE (MOCK) ---
         const INITIAL_CHANNELS = [
             { id: 'ml1', name: 'printoustudio3d', commission: 12.0, fixedFee: 6.0, color: '#FFE600', hasFreeShippingThreshold: true, freeShippingThreshold: 79.0, defaultSellerShippingCost: 19.90, defaultBelowThresholdShippingCost: 0.0 },
-            { id: 'ml2', name: 'AlucarPrintoustudio3d', commission: 19.5, fixedFee: 6.0, color: '#14B8A6', hasFreeShippingThreshold: true, freeShippingThreshold: 79.0, defaultSellerShippingCost: 19.90, defaultBelowThresholdShippingCost: 0.0 },
+            { id: 'ml2', name: 'CPS Solu��es', commission: 19.5, fixedFee: 6.0, color: '#14B8A6', hasFreeShippingThreshold: true, freeShippingThreshold: 79.0, defaultSellerShippingCost: 19.90, defaultBelowThresholdShippingCost: 0.0 },
             { id: 'shopee', name: 'Shopee', commission: 14.0, fixedFee: 3.0, color: '#EE4D2D', hasFreeShippingThreshold: false, freeShippingThreshold: 0, defaultSellerShippingCost: 0.0, defaultBelowThresholdShippingCost: 0.0 },
             { id: 'site', name: 'Site Próprio', commission: 3.99, fixedFee: 0.5, color: '#0088FF', hasFreeShippingThreshold: false, freeShippingThreshold: 0, defaultSellerShippingCost: 0.0, defaultBelowThresholdShippingCost: 0.0 },
             { id: 'direta', name: 'Venda Direta / Pix', commission: 0.0, fixedFee: 0.0, color: '#30D158', hasFreeShippingThreshold: false, freeShippingThreshold: 0, defaultSellerShippingCost: 0.0, defaultBelowThresholdShippingCost: 0.0 }
@@ -278,6 +278,134 @@
         const INITIAL_SALES = [];
 
         const INITIAL_EXPENSES = [];
+
+        
+        function SearchableProductSelect({ products = [], selectedProductId, onSelect, label = "Produto Vendido" }) {
+            const [searchTerm, setSearchTerm] = React.useState('');
+            const [isOpen, setIsOpen] = React.useState(false);
+            const containerRef = React.useRef(null);
+
+            const selectedProduct = React.useMemo(() => {
+                return products.find(p => p.id === selectedProductId);
+            }, [products, selectedProductId]);
+
+            React.useEffect(() => {
+                const handleClickOutside = (event) => {
+                    if (containerRef.current && !containerRef.current.contains(event.target)) {
+                        setIsOpen(false);
+                    }
+                };
+                document.addEventListener('mousedown', handleClickOutside);
+                return () => document.removeEventListener('mousedown', handleClickOutside);
+            }, []);
+
+            const filteredProducts = React.useMemo(() => {
+                if (!searchTerm.trim()) return products;
+                const term = searchTerm.toLowerCase();
+                return products.filter(p => 
+                    (p.name && p.name.toLowerCase().includes(term)) ||
+                    (p.sku && p.sku.toLowerCase().includes(term)) ||
+                    (p.id && p.id.toLowerCase().includes(term))
+                );
+            }, [products, searchTerm]);
+
+            return (
+                <div className="relative" ref={containerRef}>
+                    {label && (
+                        <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
+                            {label}
+                        </label>
+                    )}
+
+                    <div className="relative">
+                        <input
+                            type="text"
+                            placeholder="🔍 Pesquisar produto por nome ou SKU..."
+                            value={isOpen ? searchTerm : (selectedProduct ? selectedProduct.name : searchTerm)}
+                            onFocus={() => {
+                                setIsOpen(true);
+                                setSearchTerm('');
+                            }}
+                            onChange={(e) => {
+                                setSearchTerm(e.target.value);
+                                if (!isOpen) setIsOpen(true);
+                            }}
+                            className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 pr-10 focus:outline-none focus:border-brand-orange text-sm font-medium transition-all"
+                        />
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center pointer-events-none text-gray-400">
+                            {isOpen ? '🔍' : '▼'}
+                        </div>
+                    </div>
+
+                    {isOpen && (
+                        <div className="absolute z-50 left-0 right-0 mt-1 max-h-64 overflow-y-auto bg-[#181820] border border-brand-orange/40 rounded-xl shadow-2xl divide-y divide-white/5 backdrop-blur-xl">
+                            <div className="p-2 bg-black/40 text-[11px] font-semibold text-gray-400 flex justify-between items-center sticky top-0 z-10 border-b border-white/5">
+                                <span>{filteredProducts.length} produto(s) encontrado(s)</span>
+                                {searchTerm && (
+                                    <button 
+                                        type="button"
+                                        onClick={() => setSearchTerm('')} 
+                                        className="text-brand-orange hover:underline"
+                                    >
+                                        Limpar busca
+                                    </button>
+                                )}
+                            </div>
+
+                            {filteredProducts.length === 0 ? (
+                                <div className="p-4 text-center text-xs text-gray-400">
+                                    Nenhum produto encontrado com "{searchTerm}"
+                                </div>
+                            ) : (
+                                filteredProducts.map(p => {
+                                    const isSelected = p.id === selectedProductId;
+                                    return (
+                                        <div
+                                            key={p.id}
+                                            onClick={() => {
+                                                onSelect(p.id);
+                                                setIsOpen(false);
+                                                setSearchTerm('');
+                                            }}
+                                            className={"p-3 cursor-pointer hover:bg-brand-orange/20 transition-all flex items-center justify-between gap-3 " + (isSelected ? "bg-brand-orange/15 border-l-4 border-brand-orange" : "")}
+                                        >
+                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0 border border-white/10 overflow-hidden">
+                                                    {p.image ? (
+                                                        <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <span className="text-xs">📦</span>
+                                                    )}
+                                                </div>
+                                                <div className="flex flex-col min-w-0">
+                                                    <span className="font-bold text-white text-sm truncate">{p.name}</span>
+                                                    <div className="flex items-center gap-2 text-[10px] text-gray-400">
+                                                        {p.sku && <span>SKU: <strong className="text-gray-300">{p.sku}</strong></span>}
+                                                        <span>Estoque: <strong className={p.stock > 0 ? "text-emerald-400" : "text-rose-400"}>{(p.stock ?? 0) + " un"}</strong></span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="text-right shrink-0 flex items-center gap-2">
+                                                {p.price !== undefined && (
+                                                    <span className="text-xs font-black text-brand-orange">
+                                                        {"R$ " + parseFloat(p.price).toFixed(2)}
+                                                    </span>
+                                                )}
+                                                {isSelected && (
+                                                    <span className="text-emerald-400 font-bold">✓</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
 
         function App() {
             // --- ESTADOS DO SISTEMA ---
@@ -500,7 +628,7 @@
                         changed = true;
                     }
                     if (c.id === 'ml2' && (c.name === 'Mercado Livre - Conta 2' || c.commission === 12.0)) {
-                        target.name = 'AlucarPrintoustudio3d';
+                        target.name = 'CPS Solu��es';
                         target.commission = 19.5;
                         target.color = '#14B8A6';
                         changed = true;
@@ -1143,18 +1271,12 @@
                                             </select>
                                         </div>
 
-                                        <div>
-                                            <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Produto Vendido</label>
-                                            <select 
-                                                value={newSale.productId} 
-                                                onChange={e => setNewSale({...newSale, productId: e.target.value})}
-                                                className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange"
-                                            >
-                                                {products.map(p => (
-                                                    <option key={p.id} value={p.id}>{p.name}</option>
-                                                ))}
-                                            </select>
-                                        </div>
+                                        <SearchableProductSelect 
+                                            products={products}
+                                            selectedProductId={newSale.productId}
+                                            onSelect={id => setNewSale(prev => ({ ...prev, productId: id }))}
+                                            label="Produto Vendido"
+                                        />
                                     </div>
 
                                     <div className="grid grid-cols-3 gap-4">

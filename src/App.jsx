@@ -14,6 +14,7 @@ import IntegrationsManagerView from './components/IntegrationsManager';
 import LoginScreenView from './components/LoginScreen';
 import FacebookMarketplaceView from './components/FacebookMarketplace';
 import TikTokShopView from './components/TikTokShop';
+import SearchableProductSelect from './components/SearchableProductSelect';
 
 // --- DADOS INICIAIS DO LOCALSTORAGE (MOCK) ---
 const INITIAL_CHANNELS = [
@@ -761,18 +762,12 @@ function App() {
                                     </select>
                                 </div>
 
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Produto Vendido</label>
-                                    <select 
-                                        value={newSale.productId} 
-                                        onChange={e => setNewSale({...newSale, productId: e.target.value})}
-                                        className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange"
-                                    >
-                                        {products.map(p => (
-                                            <option key={p.id} value={p.id}>{p.name}</option>
-                                        ))}
-                                    </select>
-                                </div>
+                                <SearchableProductSelect 
+                                    products={products}
+                                    selectedProductId={newSale.productId}
+                                    onSelect={id => setNewSale(prev => ({ ...prev, productId: id }))}
+                                    label="Produto Vendido"
+                                />
                             </div>
 
                             <div className="grid grid-cols-3 gap-4">

@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { RotateCcw, Ban, Trash2, Edit2, X, Bolt } from 'lucide-react';
+import SearchableProductSelect from './SearchableProductSelect';
 
 export default function SalesListView({ sales, products, channels, setSales, compute }) {
     const [selectedStatusFilter, setSelectedStatusFilter] = useState('Todos');
@@ -211,18 +212,12 @@ export default function SalesListView({ sales, products, channels, setSales, com
                                     </select>
                                 </div>
 
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Produto Vendido</label>
-                                    <select 
-                                        value={editingSale.productId} 
-                                        onChange={e => setEditingSale({...editingSale, productId: e.target.value})}
-                                        className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange"
-                                    >
-                                        {products.map(p => (
-                                            <option key={p.id} value={p.id}>{p.name}</option>
-                                        ))}
-                                    </select>
-                                </div>
+                                <SearchableProductSelect 
+                                    products={products}
+                                    selectedProductId={editingSale.productId}
+                                    onSelect={id => setEditingSale(prev => ({ ...prev, productId: id }))}
+                                    label="Produto Vendido"
+                                />
                             </div>
 
                             <div className="grid grid-cols-3 gap-4">
