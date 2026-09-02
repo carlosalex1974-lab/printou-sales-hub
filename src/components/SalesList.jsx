@@ -1,5 +1,4 @@
 import React, { useState, useMemo } from 'react';
-import ReactDOM from 'react-dom';
 import { RotateCcw, Ban, Trash2, Edit2, X, Bolt } from 'lucide-react';
 import SearchableProductSelect from './SearchableProductSelect';
 
@@ -189,10 +188,10 @@ export default function SalesListView({ sales, products, channels, setSales, com
                 </table>
             </div>
 
-            {/* Modal de Edição de Venda (Teleportado para o body para ficar sempre no topo da tela) */}
-            {editingSale && ReactDOM.createPortal(
-                <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-[9999] p-4 overflow-y-auto animate-fade-in">
-                    <div className="w-full max-w-lg glass-panel rounded-2xl p-6 relative border border-brand-orange/30 shadow-2xl shadow-brand-orange/10 my-auto">
+            {/* Modal de Edição de Venda (Topo da página) */}
+            {editingSale && (
+                <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-start justify-center z-50 p-4 pt-10 overflow-y-auto animate-fade-in">
+                    <div className="w-full max-w-lg glass-panel rounded-2xl p-6 relative border border-brand-orange/30 shadow-2xl shadow-brand-orange/10 mb-20 mt-4">
                         <button 
                             onClick={() => setEditingSale(null)}
                             className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
@@ -297,8 +296,7 @@ export default function SalesListView({ sales, products, channels, setSales, com
                             </button>
                         </form>
                     </div>
-                </div>,
-                document.body
+                </div>
             )}
         </div>
     );

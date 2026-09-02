@@ -1423,10 +1423,9 @@
                                         Confirmar Lançamento
                                     </button>
                                 </form>
-                    </div>
-                </div>,
-                document.body
-            )}
+                            </div>
+                        </div>
+                    )}
 
                     {/* --- MODAL DE REGISTRO DE ENTRADA DE ESTOQUE --- */}
                     {stockEntry && (
@@ -1534,10 +1533,9 @@
                                         Confirmar Entrada & Registrar Despesa
                                     </button>
                                 </form>
-                    </div>
-                </div>,
-                document.body
-            )}
+                            </div>
+                        </div>
+                    )}
 
                     {/* --- MODAL DE REGISTRO DE BAIXA DE ESTOQUE --- */}
                     {stockExit && (
@@ -1628,10 +1626,9 @@
                                         Confirmar Saída (Baixa)
                                     </button>
                                 </form>
-                    </div>
-                </div>,
-                document.body
-            )}
+                            </div>
+                        </div>
+                    )}
                     {/* --- ASSISTENTE VIRTUAL KIKA --- */}
                     {renderKikaAssistant()}
                 </div>
@@ -2541,8 +2538,8 @@
 
             return (
                 <div className="glass-panel rounded-2xl p-6 overflow-hidden">
-                    {editingSale && ReactDOM.createPortal(
-                <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-[9999] p-4 overflow-y-auto animate-fade-in">
+                    {editingSale && (
+                        <div className="glass-panel rounded-2xl p-6 border border-brand-orange/30 bg-brand-orange/5 mb-6 animate-fade-in">
                             <div className="flex justify-between items-center mb-4">
                                 <h4 className="font-extrabold text-white text-md flex items-center gap-2">
                                     <i data-lucide="edit-3" className="text-brand-orange w-5 h-5"></i>
@@ -2904,10 +2901,9 @@
                                         Salvar e Corrigir Vendas
                                     </button>
                                 </form>
-                    </div>
-                </div>,
-                document.body
-            )}
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
         }
