@@ -226,12 +226,12 @@ function App() {
         }
     }, []);
 
-    // Lógica de cálculo de frete sugerido automático no lançamento de vendas
-    useEffect(() => {
-        const chan = channels.find(c => c.id === newSale.channelId);
-        if (chan) {
+    // Lógica de cálculo de frete ao trocar o canal (Venda Direta é sempre R$ 0,00 por padrão, e permite edição livre)
+    const handleChannelChange = (channelId) => {
+        const chan = channels.find(c => c.id === channelId);
+        let suggestedShipping = 0;
+        if (chan && channelId !== 'direta') {
             const gross = parseFloat(newSale.grossValue) || 0;
-            let suggestedShipping = 0;
             if (chan.hasFreeShippingThreshold) {
                 if (gross >= chan.freeShippingThreshold) {
                     suggestedShipping = chan.defaultSellerShippingCost;
@@ -241,12 +241,13 @@ function App() {
             } else {
                 suggestedShipping = chan.defaultSellerShippingCost || 0;
             }
-            
-            if (parseFloat(newSale.shipping) !== suggestedShipping && newSale.shipping !== suggestedShipping.toFixed(2)) {
-                setNewSale(prev => ({ ...prev, shipping: suggestedShipping.toFixed(2) }));
-            }
         }
-    }, [newSale.channelId, newSale.grossValue, channels]);
+        setNewSale(prev => ({ 
+            ...prev, 
+            channelId: channelId, 
+            shipping: suggestedShipping.toFixed(2) 
+        }));
+    };
 
     // Sincronização LocalStorage (Cloud agora é granular via useCloudSync)
     useEffect(() => {
@@ -399,14 +400,15 @@ function App() {
     // --- ADICIONAR NOVA VENDA ---
     const handleAddSale = (e) => {
         e.preventDefault();
+        const parsedShipping = parseFloat(newSale.shipping);
         const saleToAdd = {
             id: 's' + (sales.length + 1) + Date.now().toString().slice(-3),
             date: new Date().toISOString(),
             channelId: newSale.channelId,
             productId: newSale.productId,
-            quantity: parseInt(newSale.quantity),
-            grossValue: parseFloat(newSale.grossValue),
-            shipping: parseFloat(newSale.shipping) || 0,
+            quantity: parseInt(newSale.quantity) || 1,
+            grossValue: parseFloat(newSale.grossValue) || 0,
+            shipping: isNaN(parsedShipping) ? 0 : parsedShipping,
             status: newSale.status
         };
 
@@ -753,7 +755,7 @@ function App() {
                                     <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Canal de Venda</label>
                                     <select 
                                         value={newSale.channelId} 
-                                        onChange={e => setNewSale({...newSale, channelId: e.target.value})}
+                                        onChange={e => handleChannelChange(e.target.value)}
                                         className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange"
                                     >
                                         {channels.map(c => (

@@ -70,7 +70,14 @@ export default function SalesListView({ sales, products, channels, setSales, com
 
     const handleSaveEdit = (e) => {
         e.preventDefault();
-        setSales(sales.map(s => s.id === editingSale.id ? editingSale : s));
+        const parsedShipping = parseFloat(editingSale.shipping);
+        const updatedSale = {
+            ...editingSale,
+            grossValue: parseFloat(editingSale.grossValue) || 0,
+            quantity: parseInt(editingSale.quantity) || 1,
+            shipping: isNaN(parsedShipping) ? 0 : parsedShipping
+        };
+        setSales(sales.map(s => s.id === updatedSale.id ? updatedSale : s));
         setEditingSale(null);
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };

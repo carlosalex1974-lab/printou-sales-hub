@@ -924,7 +924,7 @@
                     productId: newSale.productId,
                     quantity: parseInt(newSale.quantity),
                     grossValue: parseFloat(newSale.grossValue),
-                    shipping: parseFloat(newSale.shipping) || 0,
+                    shipping: isNaN(parseFloat(newSale.shipping)) ? 0 : parseFloat(newSale.shipping),
                     status: newSale.status
                 };
 
@@ -1316,7 +1316,7 @@
                                             <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Canal de Venda</label>
                                             <select 
                                                 value={newSale.channelId} 
-                                                onChange={e => setNewSale({...newSale, channelId: e.target.value})}
+                                                onChange={e => handleChannelChange(e.target.value)}
                                                 className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange"
                                             >
                                                 {channels.map(c => (
