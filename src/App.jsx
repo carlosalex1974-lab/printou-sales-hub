@@ -73,7 +73,19 @@ function useCloudSync(collection, dataArray, isLoaded) {
     }, [dataArray, collection, isLoaded]);
 }
 
-function App() {
+
+        function scrollToTop() {
+            try {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                document.documentElement.scrollTop = 0;
+                document.body.scrollTop = 0;
+                const mainEl = document.querySelector('main') || document.querySelector('.overflow-y-auto');
+                if (mainEl) mainEl.scrollTo({ top: 0, behavior: 'smooth' });
+            } catch (e) {}
+        }
+
+
+        function App() {
 
     // --- ESTADOS DO SISTEMA ---
     const [isLoaded, setIsLoaded] = useState(false);
