@@ -813,7 +813,7 @@
                 }
 
                 // Prioridade 3: Fallback para regras gerais do canal
-                if (shipping === 0 && chan) {
+                if (shipping === 0 && chan && chan.id !== 'direta') {
                     const defaultCost = chan.defaultSellerShippingCost || 0;
                     if (chan.hasFreeShippingThreshold) {
                         if (sale.grossValue >= chan.freeShippingThreshold) {
