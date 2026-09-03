@@ -2734,7 +2734,8 @@
                                                     {prod && (
                                                         <button 
                                                             onClick={() => {
-                                                                const fallbackPrice = (compute(sale).productCost * (prod.type === 'resale' ? 1.8 : 3)).toFixed(2);
+                                                            try { const mainEl = document.querySelector('main') || document.querySelector('.overflow-y-auto') || document.documentElement; if (mainEl) { mainEl.scrollTop = 0; mainEl.scrollTo({ top: 0, behavior: 'smooth' }); } window.scrollTo({ top: 0, behavior: 'smooth' }); } catch(e){}
+                                                            const fallbackPrice = (compute(sale).productCost * (prod.type === 'resale' ? 1.8 : 3)).toFixed(2);
                                                                 setEditingProductFromSales({ 
                                                                     ...prod, 
                                                                     price: prod.price !== undefined && prod.price > 0 ? String(prod.price) : fallbackPrice,
@@ -2826,8 +2827,8 @@
 
                     {/* Modal de Edição Rápida de Produto na Aba de Vendas */}
                     {editingProductFromSales && (
-                        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
-                            <div className="bg-[#121215] border border-white/10 rounded-2xl w-full max-w-md p-6 relative shadow-2xl animate-scale-up">
+                        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-start justify-center p-4 pt-10 md:pt-14 z-[9999] overflow-y-auto animate-fade-in">
+                            <div className="bg-[#121215] border border-white/10 rounded-2xl w-full max-w-md p-6 relative shadow-2xl animate-scale-up my-2 mt-2">
                                 <button 
                                     type="button"
                                     onClick={() => setEditingProductFromSales(null)}
