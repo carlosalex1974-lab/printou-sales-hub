@@ -293,45 +293,26 @@ function useCloudSync(collection, dataArray, isLoaded) {
     };
 
     // --- LÓGICA DE CÁLCULO FINANCEIRO POR VENDA ---
-                const computeSaleFinancials = (sale) => {
-                const prod = typeof findProduct === 'function' ? findProduct(sale.productId) : products.find(p => p.id === sale.productId);
-                const chan = channels.find(c => c.id === sale.channelId);
-                
-                const productCostTotal = prod ? (typeof calculateProductCost === 'function' ? calculateProductCost(prod) : 0) * sale.quantity : 0;
-                
-                let fee = 0;
-                if (chan) {
-                    let fixedFee = chan.fixedFee || 0;
-                    if ((chan.id.startsWith('ml') || chan.name.toLowerCase().includes('mercado')) && sale.grossValue >= 79) {
-                        fixedFee = 0;
-                    }
-                    fee = (sale.grossValue * ((chan.commission || 0) / 100)) + fixedFee;
-                }
-                
-                // Prioridade 1: Se a venda possui o valor de frete definido explicitamente (inclusive 0), usa o frete da venda!
-                let shipping = 0;
-                if (sale.shipping !== undefined && sale.shipping !== null && sale.shipping !== '' && !isNaN(parseFloat(sale.shipping))) {
-                    shipping = parseFloat(sale.shipping);
-                } else if (prod && prod.customShippingCost !== undefined && prod.customShippingCost !== null && !isNaN(parseFloat(prod.customShippingCost)) && parseFloat(prod.customShippingCost) > 0) {
-                    shipping = parseFloat(prod.customShippingCost);
-                } else if (chan && chan.id !== 'direta') {
-                    const defaultCost = chan.defaultSellerShippingCost || 0;
-                    if (chan.hasFreeShippingThreshold) {
-                        shipping = sale.grossValue >= chan.freeShippingThreshold ? defaultCost : (chan.defaultBelowThresholdShippingCost || 0);
-                    } else {
-                        shipping = defaultCost;
-                    }
-                }
-
-                const netProfit = sale.status === 'Cancelado' ? 0 : parseFloat((sale.grossValue - fee - productCostTotal - shipping).toFixed(2));
-                
-                return {
-                    productCost: productCostTotal,
-                    fees: fee,
-                    netProfit: netProfit,
-                    shippingApplied: shipping
-                };
-            };
+    const computeSaleFinancials = (sale) => {
+        const prod = products.find(p => p.id === sale.productId);
+        const chan = channels.find(c => c.id === sale.channelId);
+        
+        const productCostTotal = prod ? calculateProductCost(prod) * sale.quantity : 0;
+        
+        let fee = 0;
+        if (chan) {
+            fee = (sale.grossValue * (chan.commission / 100)) + chan.fixedFee;
+        }
+        
+        const shipping = parseFloat(sale.shipping) || 0;
+        const netProfit = sale.status === 'Cancelado' ? 0 : parseFloat((sale.grossValue - fee - productCostTotal - shipping).toFixed(2));
+        
+        return {
+            productCost: productCostTotal,
+            fees: fee,
+            netProfit: netProfit
+        };
+    };
 
     // --- METRICAS GERAIS PARA O DASHBOARD ---
     const financeStats = useMemo(() => {

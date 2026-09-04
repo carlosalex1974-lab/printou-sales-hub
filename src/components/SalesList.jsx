@@ -86,8 +86,8 @@ export default function SalesListView({ sales, products, channels, setSales, com
         <>
             {/* Modal de Edição de Venda (Fora do glass-panel para centralizar perfeitamente na tela) */}
             {editingSale && (
-                <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-start justify-center p-4 pt-10 md:pt-14 z-[9999] overflow-y-auto animate-fade-in">
-                    <div className="w-full max-w-lg glass-panel rounded-2xl p-6 relative border border-brand-orange/30 shadow-2xl shadow-brand-orange/10 my-2 mt-2">
+                <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-[9999] p-4 overflow-y-auto animate-fade-in">
+                    <div className="w-full max-w-lg glass-panel rounded-2xl p-6 relative border border-brand-orange/30 shadow-2xl shadow-brand-orange/10 my-auto">
                         <button 
                             onClick={() => setEditingSale(null)}
                             className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
