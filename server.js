@@ -733,7 +733,7 @@ app.post('/api/webhooks/:provider', async (req, res) => {
                         const shipData = await shipRes.json();
                         // Se o frete foi grátis para o comprador (custo 0), o custo cobrado do vendedor fica em base_cost ou cost
                         if (orderData.shipping.free_shipping || (shipData.shipping_option && shipData.shipping_option.cost === 0)) {
-                            shipping = parseFloat(shipData.base_cost) || parseFloat(shipData.cost) || 0.0;
+                            shipping = parseFloat(shipData.list_cost) || parseFloat(shipData.cost) || 0.0;
                         } else if (shipData.shipping_option && shipData.shipping_option.cost !== undefined) {
                             shipping = parseFloat(shipData.shipping_option.cost);
                         }
@@ -2298,7 +2298,7 @@ async function pollMercadoLivreOrders() {
                             const shipData = await shipRes.json();
                             // Se o frete foi grátis para o comprador (custo 0), o custo cobrado do vendedor fica em base_cost ou cost
                             if (order.shipping.free_shipping || (shipData.shipping_option && shipData.shipping_option.cost === 0)) {
-                                shipping = parseFloat(shipData.base_cost) || parseFloat(shipData.cost) || 0.0;
+                                shipping = parseFloat(shipData.list_cost) || parseFloat(shipData.cost) || 0.0;
                             } else if (shipData.shipping_option && shipData.shipping_option.cost !== undefined) {
                                 shipping = parseFloat(shipData.shipping_option.cost);
                             }
