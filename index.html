@@ -785,7 +785,8 @@
                 return parseFloat((rawCost + prod.finishingCost + prod.packagingCost).toFixed(2));
             };
 
-                        const computeSaleFinancials = (sale) => {
+                                    // --- LÓGICA DE CÁLCULO FINANCEIRO POR VENDA ---
+            const computeSaleFinancials = (sale) => {
                 const prod = typeof findProduct === 'function' ? findProduct(sale.productId) : products.find(p => p.id === sale.productId);
                 const chan = channels.find(c => c.id === sale.channelId);
                 
@@ -800,22 +801,26 @@
                     fee = (sale.grossValue * ((chan.commission || 0) / 100)) + fixedFee;
                 }
                 
-                // Prioridade 1: Venda Direta tem frete padrão R$ 0,00 a menos que a venda defina outro valor
                 let shipping = 0;
                 if (sale.channelId === 'direta') {
+                    // Venda Direta / Pix: Usa estritamente o valor da venda (padrão R$ 0,00)
                     shipping = (sale.shipping !== undefined && sale.shipping !== null && sale.shipping !== '' && !isNaN(parseFloat(sale.shipping)))
                         ? parseFloat(sale.shipping)
                         : 0;
-                } else if (sale.shipping !== undefined && sale.shipping !== null && sale.shipping !== '' && !isNaN(parseFloat(sale.shipping))) {
-                    shipping = parseFloat(sale.shipping);
-                } else if (prod && prod.customShippingCost !== undefined && prod.customShippingCost !== null && !isNaN(parseFloat(prod.customShippingCost)) && parseFloat(prod.customShippingCost) > 0) {
-                    shipping = parseFloat(prod.customShippingCost);
-                } else if (chan) {
-                    const defaultCost = chan.defaultSellerShippingCost || 0;
-                    if (chan.hasFreeShippingThreshold) {
-                        shipping = sale.grossValue >= chan.freeShippingThreshold ? defaultCost : (chan.defaultBelowThresholdShippingCost || 0);
-                    } else {
-                        shipping = defaultCost;
+                } else {
+                    // Canais Online (Mercado Livre, Shopee, Site):
+                    // Se o frete da venda for maior que 0, usa ele; se for 0/omisso (frete grátis ao comprador), aplica o frete do vendedor (produto ou canal)
+                    if (sale.shipping !== undefined && sale.shipping !== null && sale.shipping !== '' && !isNaN(parseFloat(sale.shipping)) && parseFloat(sale.shipping) > 0) {
+                        shipping = parseFloat(sale.shipping);
+                    } else if (prod && prod.customShippingCost !== undefined && prod.customShippingCost !== null && parseFloat(prod.customShippingCost) > 0) {
+                        shipping = parseFloat(prod.customShippingCost);
+                    } else if (chan) {
+                        const defaultCost = chan.defaultSellerShippingCost || 0;
+                        if (chan.hasFreeShippingThreshold) {
+                            shipping = sale.grossValue >= chan.freeShippingThreshold ? defaultCost : (chan.defaultBelowThresholdShippingCost || 0);
+                        } else {
+                            shipping = defaultCost;
+                        }
                     }
                 }
 
