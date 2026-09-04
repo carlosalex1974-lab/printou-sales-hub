@@ -763,55 +763,46 @@
                 return parseFloat((rawCost + prod.finishingCost + prod.packagingCost).toFixed(2));
             };
 
-            // --- LÓGICA DE CÁLCULO FINANCEIRO POR VENDA ---
+                        // --- LÓGICA DE CÁLCULO FINANCEIRO POR VENDA ---
             const computeSaleFinancials = (sale) => {
-                const prod = findProduct(sale.productId);
+                const prod = typeof findProduct === 'function' ? findProduct(sale.productId) : products.find(p => p.id === sale.productId);
                 const chan = channels.find(c => c.id === sale.channelId);
                 
-                const productCostTotal = prod ? calculateProductCost(prod) * sale.quantity : 0;
+                const productCostTotal = prod ? (typeof calculateProductCost === 'function' ? calculateProductCost(prod) : 0) * sale.quantity : 0;
                 
                 let fee = 0;
                 if (chan) {
-                    let fixedFee = chan.fixedFee;
-                    // Regra Mercado Livre: Sem taxa fixa para vendas >= R$ 79
+                    let fixedFee = chan.fixedFee || 0;
                     if ((chan.id.startsWith('ml') || chan.name.toLowerCase().includes('mercado')) && sale.grossValue >= 79) {
                         fixedFee = 0;
                     }
-                    fee = (sale.grossValue * (chan.commission / 100)) + fixedFee;
+                    fee = (sale.grossValue * ((chan.commission || 0) / 100)) + fixedFee;
                 }
                 
-                                // Prioridade 1: Frete definido explicitamente na venda (inclusive 0)
-                let shipping = (sale.shipping !== undefined && sale.shipping !== null && sale.shipping !== '' && !isNaN(parseFloat(sale.shipping)))
-                    ? parseFloat(sale.shipping)
-                    : null;
-
-                // Prioridade 2: Frete customizado no cadastro do produto (se não houver frete na venda)
-                if (shipping === null) {
-                    if (prod && prod.customShippingCost !== undefined && prod.customShippingCost !== null && !isNaN(parseFloat(prod.customShippingCost)) && parseFloat(prod.customShippingCost) > 0) {
-                        shipping = parseFloat(prod.customShippingCost);
-                    }
-                }
-
-                // Prioridade 3: Fallback de regras do canal (se não for Venda Direta)
-                if (shipping === null) {
-                    if (chan && chan.id !== 'direta') {
-                        const defaultCost = chan.defaultSellerShippingCost || 0;
-                        if (chan.hasFreeShippingThreshold) {
-                            shipping = sale.grossValue >= chan.freeShippingThreshold ? defaultCost : (chan.defaultBelowThresholdShippingCost || 0);
-                        } else {
-                            shipping = defaultCost;
-                        }
+                // Prioridade 1: Frete definido na venda (inclusive 0)
+                let shipping = 0;
+                if (sale.shipping !== undefined && sale.shipping !== null && sale.shipping !== '' && !isNaN(parseFloat(sale.shipping))) {
+                    shipping = parseFloat(sale.shipping);
+                } else if (prod && prod.customShippingCost !== undefined && prod.customShippingCost !== null && !isNaN(parseFloat(prod.customShippingCost)) && parseFloat(prod.customShippingCost) > 0) {
+                    shipping = parseFloat(prod.customShippingCost);
+                } else if (chan && chan.id !== 'direta') {
+                    const defaultCost = chan.defaultSellerShippingCost || 0;
+                    if (chan.hasFreeShippingThreshold) {
+                        shipping = sale.grossValue >= chan.freeShippingThreshold ? defaultCost : (chan.defaultBelowThresholdShippingCost || 0);
                     } else {
-                        shipping = 0;
+                        shipping = defaultCost;
                     }
-                },
-                            scales: {
-                                x: { grid: { display: false }, ticks: { color: '#9CA3AF' } },
-                                y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9CA3AF' } }
-                            }
-                        }
-                    });
                 }
+
+                const netProfit = sale.status === 'Cancelado' ? 0 : parseFloat((sale.grossValue - fee - productCostTotal - shipping).toFixed(2));
+                
+                return {
+                    productCost: productCostTotal,
+                    fees: fee,
+                    netProfit: netProfit,
+                    shippingApplied: shipping
+                };
+            };
 
                 // 2. Distribuição por Canal
                 const counts = {};
@@ -1299,7 +1290,7 @@
                                     <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Canal de Venda</label>
                                     <select
                                         value={editingSale.channelId}
-                                        onChange={e => setEditingSale(prev => ({ ...prev, channelId: e.target.value }))}
+                                        onChange={e => { const newChan = e.target.value; setEditingSale(prev => ({ ...prev, channelId: newChan, shipping: newChan === "direta" ? "0.00" : prev.shipping })); }}
                                         className="w-full bg-brand-darkBg border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange"
                                     >
                                         {channels.map(c => (
@@ -1513,7 +1504,8 @@
                                                     <>
                                                         <button 
                                                             onClick={() => {
-                                                                scrollToTop(); setEditingSale({
+                                                            try { const mainEl = document.querySelector('main') || document.querySelector('.overflow-y-auto') || document.documentElement; if (mainEl) { mainEl.scrollTop = 0; mainEl.scrollTo({ top: 0, behavior: 'smooth' }); } window.scrollTo({ top: 0, behavior: 'smooth' }); } catch(e){}
+                                                            setEditingSale({
                                                                     ...sale,
                                                                     date: formatForInput(sale.date)
                                                                 });
