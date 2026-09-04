@@ -744,7 +744,7 @@ app.post('/api/webhooks/:provider', async (req, res) => {
             }
 
             // Fallback para regras do canal cadastradas se o frete for importado como zero
-            if (shipping === 0) {
+            if (shipping === 0 && channelId !== 'direta') {
                 const chan = db.channels.find(c => c.id === channelId);
                 if (chan) {
                     if (chan.hasFreeShippingThreshold) {
@@ -2309,7 +2309,7 @@ async function pollMercadoLivreOrders() {
                 }
 
                 // Fallback para regras do canal cadastradas se o frete for importado como zero
-                if (shipping === 0) {
+                if (shipping === 0 && channelId !== 'direta') {
                     const chan = freshDb.channels.find(c => c.id === channelId);
                     if (chan) {
                         if (chan.hasFreeShippingThreshold) {

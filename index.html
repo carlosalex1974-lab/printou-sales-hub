@@ -785,42 +785,40 @@
                 return parseFloat((rawCost + prod.finishingCost + prod.packagingCost).toFixed(2));
             };
 
-            // --- LÓGICA DE CÁLCULO FINANCEIRO POR VENDA ---
-            const computeSaleFinancials = (sale) => {
-                const prod = findProduct(sale.productId);
+                        const computeSaleFinancials = (sale) => {
+                const prod = typeof findProduct === 'function' ? findProduct(sale.productId) : products.find(p => p.id === sale.productId);
                 const chan = channels.find(c => c.id === sale.channelId);
                 
-                const productCostTotal = prod ? calculateProductCost(prod) * sale.quantity : 0;
+                const productCostTotal = prod ? (typeof calculateProductCost === 'function' ? calculateProductCost(prod) : 0) * sale.quantity : 0;
                 
                 let fee = 0;
                 if (chan) {
-                    let fixedFee = chan.fixedFee;
-                    // Regra Mercado Livre: Sem taxa fixa para vendas >= R$ 79
+                    let fixedFee = chan.fixedFee || 0;
                     if ((chan.id.startsWith('ml') || chan.name.toLowerCase().includes('mercado')) && sale.grossValue >= 79) {
                         fixedFee = 0;
                     }
-                    fee = (sale.grossValue * (chan.commission / 100)) + fixedFee;
+                    fee = (sale.grossValue * ((chan.commission || 0) / 100)) + fixedFee;
                 }
                 
-                // Prioridade 1: Frete customizado configurado no produto (aba Produtos)
-                let shipping = (sale.shipping !== undefined && sale.shipping !== null && sale.shipping !== '' && !isNaN(parseFloat(sale.shipping)))
-                    ? parseFloat(sale.shipping)
-                    : ((prod && prod.customShippingCost !== undefined && prod.customShippingCost > 0) ? parseFloat(prod.customShippingCost) : 0);
-
-                // Prioridade 3: Fallback para regras gerais do canal
-                if (shipping === 0 && chan && chan.id !== 'direta') {
+                // Prioridade 1: Venda Direta tem frete padrão R$ 0,00 a menos que a venda defina outro valor
+                let shipping = 0;
+                if (sale.channelId === 'direta') {
+                    shipping = (sale.shipping !== undefined && sale.shipping !== null && sale.shipping !== '' && !isNaN(parseFloat(sale.shipping)))
+                        ? parseFloat(sale.shipping)
+                        : 0;
+                } else if (sale.shipping !== undefined && sale.shipping !== null && sale.shipping !== '' && !isNaN(parseFloat(sale.shipping))) {
+                    shipping = parseFloat(sale.shipping);
+                } else if (prod && prod.customShippingCost !== undefined && prod.customShippingCost !== null && !isNaN(parseFloat(prod.customShippingCost)) && parseFloat(prod.customShippingCost) > 0) {
+                    shipping = parseFloat(prod.customShippingCost);
+                } else if (chan) {
                     const defaultCost = chan.defaultSellerShippingCost || 0;
                     if (chan.hasFreeShippingThreshold) {
-                        if (sale.grossValue >= chan.freeShippingThreshold) {
-                            shipping = defaultCost;
-                        } else {
-                            shipping = chan.defaultBelowThresholdShippingCost || 0;
-                        }
+                        shipping = sale.grossValue >= chan.freeShippingThreshold ? defaultCost : (chan.defaultBelowThresholdShippingCost || 0);
                     } else {
                         shipping = defaultCost;
                     }
                 }
-                
+
                 const netProfit = sale.status === 'Cancelado' ? 0 : parseFloat((sale.grossValue - fee - productCostTotal - shipping).toFixed(2));
                 
                 return {
@@ -2534,7 +2532,7 @@
             return (
                 <div className="glass-panel rounded-2xl p-6 overflow-hidden">
                     {editingSale && (
-                <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-[9999] p-4 overflow-y-auto animate-fade-in">
+                <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-start justify-center p-4 pt-10 md:pt-14 z-[9999] overflow-y-auto animate-fade-in" style={{ top: 0, left: 0, right: 0, bottom: 0 }}>
                             <div className="flex justify-between items-center mb-4">
                                 <h4 className="font-extrabold text-white text-md flex items-center gap-2">
                                     <i data-lucide="edit-3" className="text-brand-orange w-5 h-5"></i>
@@ -2785,7 +2783,8 @@
                                                         )}
 <button 
                                                             onClick={() => {
-                                                                scrollToTop(); setEditingSale({
+                                                            try { window.scrollTo(0, 0); const mainEl = document.querySelector("main") || document.querySelector(".overflow-y-auto"); if (mainEl) mainEl.scrollTop = 0; } catch(e){}
+                                                            setEditingSale({
                                                                     ...sale,
                                                                     date: formatForInput(sale.date)
                                                                 });
