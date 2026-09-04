@@ -763,12 +763,13 @@
                 return parseFloat((rawCost + prod.finishingCost + prod.packagingCost).toFixed(2));
             };
 
-                                    // --- LÓGICA DE CÁLCULO FINANCEIRO POR VENDA ---
+                                                // --- LÓGICA DE CÁLCULO FINANCEIRO POR VENDA ---
             const computeSaleFinancials = (sale) => {
                 const prod = typeof findProduct === 'function' ? findProduct(sale.productId) : products.find(p => p.id === sale.productId);
                 const chan = channels.find(c => c.id === sale.channelId);
+                const qty = sale.quantity || 1;
                 
-                const productCostTotal = prod ? (typeof calculateProductCost === 'function' ? calculateProductCost(prod) : 0) * sale.quantity : 0;
+                const productCostTotal = prod ? (typeof calculateProductCost === 'function' ? calculateProductCost(prod) : 0) * qty : 0;
                 
                 let fee = 0;
                 if (chan) {
@@ -776,29 +777,33 @@
                     if ((chan.id.startsWith('ml') || chan.name.toLowerCase().includes('mercado')) && sale.grossValue >= 79) {
                         fixedFee = 0;
                     }
-                    fee = (sale.grossValue * ((chan.commission || 0) / 100)) + fixedFee;
+                    fee = (sale.grossValue * ((chan.commission || 0) / 100)) + (fixedFee * qty);
                 }
                 
                 let shipping = 0;
                 if (sale.channelId === 'direta') {
-                    // Venda Direta / Pix: Usa estritamente o valor da venda (padrão R$ 0,00)
+                    // Venda Direta / Pix: Usa estritamente o valor informado na venda (padrão R$ 0,00)
                     shipping = (sale.shipping !== undefined && sale.shipping !== null && sale.shipping !== '' && !isNaN(parseFloat(sale.shipping)))
                         ? parseFloat(sale.shipping)
                         : 0;
                 } else {
                     // Canais Online (Mercado Livre, Shopee, Site):
-                    // Se o frete da venda for maior que 0, usa ele; se for 0/omisso (frete grátis ao comprador), aplica o frete do vendedor (produto ou canal)
-                    if (sale.shipping !== undefined && sale.shipping !== null && sale.shipping !== '' && !isNaN(parseFloat(sale.shipping)) && parseFloat(sale.shipping) > 0) {
-                        shipping = parseFloat(sale.shipping);
-                    } else if (prod && prod.customShippingCost !== undefined && prod.customShippingCost !== null && parseFloat(prod.customShippingCost) > 0) {
-                        shipping = parseFloat(prod.customShippingCost);
-                    } else if (chan) {
-                        const defaultCost = chan.defaultSellerShippingCost || 0;
-                        if (chan.hasFreeShippingThreshold) {
-                            shipping = sale.grossValue >= chan.freeShippingThreshold ? defaultCost : (chan.defaultBelowThresholdShippingCost || 0);
-                        } else {
-                            shipping = defaultCost;
-                        }
+                    // Determina o custo de frete do vendedor (tabela subsidiada do produto ou do canal)
+                    let sellerShippingUnit = (prod && prod.customShippingCost !== undefined && prod.customShippingCost !== null && parseFloat(prod.customShippingCost) > 0)
+                        ? parseFloat(prod.customShippingCost)
+                        : (chan ? (chan.defaultSellerShippingCost || 20.75) : 20.75);
+
+                    let expectedSellerShipping = sellerShippingUnit * qty;
+
+                    const rawShip = (sale.shipping !== undefined && sale.shipping !== null && sale.shipping !== '' && !isNaN(parseFloat(sale.shipping)))
+                        ? parseFloat(sale.shipping)
+                        : 0;
+
+                    // Se o valor gravado na venda for desproporcionalmente alto (frete bruto de transportadora R$ 43,50 / R$ 87,00) ou 0, usa o frete real do vendedor
+                    if (rawShip > expectedSellerShipping + 0.05 || rawShip === 0) {
+                        shipping = expectedSellerShipping;
+                    } else {
+                        shipping = rawShip;
                     }
                 }
 

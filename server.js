@@ -2187,18 +2187,24 @@ async function sanitizeMongoSalesOnStartup() {
                     s.shipping = '0.00';
                     updated = true;
                 }
-            } else if (s.shipping && parseFloat(s.shipping) > 30 * qty) {
-                let targetCost = 0;
+            } else {
+                // Para Mercado Livre / Shopee / Canais Online:
+                // Se a venda estiver com frete inflado (> R$ 25 * qty) vindo da API da transportadora, recalcula para o custo subsidiado do vendedor
+                let expectedShipping = 0;
                 if (prod && prod.customShippingCost && parseFloat(prod.customShippingCost) > 0) {
-                    targetCost = parseFloat(prod.customShippingCost) * qty;
+                    expectedShipping = parseFloat(prod.customShippingCost) * qty;
                 } else if (chan && chan.defaultSellerShippingCost) {
-                    targetCost = parseFloat(chan.defaultSellerShippingCost) * qty;
+                    expectedShipping = parseFloat(chan.defaultSellerShippingCost) * qty;
                 } else {
-                    targetCost = 20.75 * qty;
+                    expectedShipping = 20.75 * qty;
                 }
-                console.log(`[STARTUP-CLEAN] Corrigindo frete inflado da Venda #${s.id}: De ${s.shipping} para ${targetCost.toFixed(2)}`);
-                s.shipping = targetCost.toFixed(2);
-                updated = true;
+
+                const currentShip = parseFloat(s.shipping) || 0;
+                if (currentShip > expectedShipping + 0.05 || currentShip === 0) {
+                    console.log(`[STARTUP-CLEAN] Corrigindo frete da Venda #${s.id}: De R$ ${s.shipping} para R$ ${expectedShipping.toFixed(2)}`);
+                    s.shipping = expectedShipping.toFixed(2);
+                    updated = true;
+                }
             }
         });
 
