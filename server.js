@@ -2169,6 +2169,48 @@ app.post('/api/webhooks/tiktokshop', async (req, res) => {
 });
 
 
+
+// Cleaning helper for sales saved in MongoDB Atlas
+async function sanitizeMongoSalesOnStartup() {
+    try {
+        const freshDb = await readDb();
+        if (!freshDb.sales) return;
+        let updated = false;
+
+        freshDb.sales.forEach(s => {
+            const qty = s.quantity || 1;
+            const prod = freshDb.products?.find(p => p.id === s.productId || (p.externalIds && p.externalIds.includes(s.productId)));
+            const chan = freshDb.channels?.find(c => c.id === s.channelId);
+
+            if (s.channelId === 'direta') {
+                if (s.shipping === '20.75' || s.shipping === 20.75 || s.shipping === '19.90' || s.shipping === 19.90) {
+                    s.shipping = '0.00';
+                    updated = true;
+                }
+            } else if (s.shipping && parseFloat(s.shipping) > 30 * qty) {
+                let targetCost = 0;
+                if (prod && prod.customShippingCost && parseFloat(prod.customShippingCost) > 0) {
+                    targetCost = parseFloat(prod.customShippingCost) * qty;
+                } else if (chan && chan.defaultSellerShippingCost) {
+                    targetCost = parseFloat(chan.defaultSellerShippingCost) * qty;
+                } else {
+                    targetCost = 20.75 * qty;
+                }
+                console.log(`[STARTUP-CLEAN] Corrigindo frete inflado da Venda #${s.id}: De ${s.shipping} para ${targetCost.toFixed(2)}`);
+                s.shipping = targetCost.toFixed(2);
+                updated = true;
+            }
+        });
+
+        if (updated) {
+            await saveDb(freshDb);
+            console.log('[STARTUP-CLEAN] ✅ Banco de dados no MongoDB limpo e sincronizado com sucesso!');
+        }
+    } catch (e) {
+        console.error('[STARTUP-CLEAN] Erro na limpeza inicial:', e.message);
+    }
+}
+
 app.listen(PORT, () => {
     console.log(`\n======================================================`);
     console.log(`🚀 Printou Hub - Servidor Ativo!`);
@@ -2180,7 +2222,8 @@ app.listen(PORT, () => {
 
     // Primeira sincronização 10 segundos após iniciar
     setTimeout(() => {
-        console.log('[AUTO-SYNC] Executando primeira sincronização...');
+        console.log('[AUTO-SYNC] Executando primeira sincronização e limpeza de fretes...');
+        sanitizeMongoSalesOnStartup();
         pollMercadoLivreOrders();
         pollCancelledOrders();
     }, 10000);
