@@ -198,6 +198,7 @@ function useCloudSync(collection, dataArray, isLoaded) {
         productId: 'p1',
         quantity: 1,
         grossValue: '',
+        discount: '0.00',
         shipping: '0.00',
         status: 'Pago'
     });
@@ -336,7 +337,8 @@ function useCloudSync(collection, dataArray, isLoaded) {
                     }
                 }
 
-                const netProfit = sale.status === 'Cancelado' ? 0 : parseFloat((sale.grossValue - fee - productCostTotal - shipping).toFixed(2));
+                const discount = parseFloat(sale.discount) || 0;
+                const netProfit = sale.status === 'Cancelado' ? 0 : parseFloat((sale.grossValue - fee - productCostTotal - shipping - discount).toFixed(2));
                 
                 return {
                     productCost: productCostTotal,
@@ -452,6 +454,7 @@ function useCloudSync(collection, dataArray, isLoaded) {
             productId: newSale.productId,
             quantity: parseInt(newSale.quantity) || 1,
             grossValue: parseFloat(newSale.grossValue) || 0,
+            discount: parseFloat(newSale.discount) || 0,
             shipping: isNaN(parsedShipping) ? 0 : parsedShipping,
             status: newSale.status
         };
@@ -464,8 +467,9 @@ function useCloudSync(collection, dataArray, isLoaded) {
             productId: products[0]?.id || '',
             quantity: 1,
             grossValue: '',
-            shipping: '0.00',
-            status: 'Pago'
+        discount: '0.00',
+        shipping: '0.00',
+        status: 'Pago'
         });
     };
 
@@ -816,7 +820,7 @@ function useCloudSync(collection, dataArray, isLoaded) {
                                 />
                             </div>
 
-                            <div className="grid grid-cols-3 gap-4">
+                            <div className="grid grid-cols-4 gap-4">
                                 <div>
                                     <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Qtd</label>
                                     <input 
@@ -827,6 +831,19 @@ function useCloudSync(collection, dataArray, isLoaded) {
                                         onChange={e => setNewSale({...newSale, quantity: e.target.value})}
                                         className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange"
                                     />
+                                </div>
+                                <div>
+                                    <div>
+                                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Desconto (R$)</label>
+                                    <input 
+                                        type="number" 
+                                        step="0.01"
+                                        placeholder="0.00"
+                                        value={newSale.discount}
+                                        onChange={e => setNewSale({...newSale, discount: e.target.value})}
+                                        className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange"
+                                    />
+                                </div>
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Preço Bruto (R$)</label>

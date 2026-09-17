@@ -75,6 +75,7 @@ export default function SalesListView({ sales, products, channels, setSales, com
             ...editingSale,
             grossValue: parseFloat(editingSale.grossValue) || 0,
             quantity: parseInt(editingSale.quantity) || 1,
+            discount: parseFloat(editingSale.discount) || 0,
             shipping: isNaN(parsedShipping) ? 0 : parsedShipping
         };
         setSales(sales.map(s => s.id === updatedSale.id ? updatedSale : s));
@@ -123,7 +124,7 @@ export default function SalesListView({ sales, products, channels, setSales, com
                                 />
                             </div>
 
-                            <div className="grid grid-cols-3 gap-4">
+                            <div className="grid grid-cols-4 gap-4">
                                 <div>
                                     <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Qtd</label>
                                     <input 
@@ -132,6 +133,16 @@ export default function SalesListView({ sales, products, channels, setSales, com
                                         required
                                         value={editingSale.quantity}
                                         onChange={e => setEditingSale({...editingSale, quantity: parseInt(e.target.value) || 1})}
+                                        className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Desconto (R$)</label>
+                                    <input 
+                                        type="number" 
+                                        step="0.01"
+                                        value={editingSale.discount || ''}
+                                        onChange={e => setEditingSale({...editingSale, discount: parseFloat(e.target.value) || 0})}
                                         className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange"
                                     />
                                 </div>
@@ -221,6 +232,7 @@ export default function SalesListView({ sales, products, channels, setSales, com
                                 <th className="pb-3 pr-2">Produto</th>
                                 <th className="pb-3 text-center pr-2">Qtd</th>
                                 <th className="pb-3 text-right pr-2">Bruto</th>
+                                <th className="pb-3 text-right pr-2">Desc.</th>
                                 <th className="pb-3 text-right pr-2">Taxas</th>
                                 <th className="pb-3 text-right pr-2">Lucro</th>
                                 <th className="pb-3 text-center pr-2">Status</th>
@@ -243,6 +255,7 @@ export default function SalesListView({ sales, products, channels, setSales, com
                                         <td className="py-4 font-bold text-white pr-2 truncate max-w-[120px] md:max-w-[200px]">{prod?.name || 'Excluído'}</td>
                                         <td className="py-4 text-center font-bold pr-2">{sale.quantity}</td>
                                         <td className="py-4 text-right font-bold text-white pr-2 whitespace-nowrap">R$ {sale.grossValue.toFixed(2)}</td>
+                                        <td className="py-4 text-right font-bold text-rose-400 pr-2 whitespace-nowrap">R$ {(parseFloat(sale.discount)||0).toFixed(2)}</td>
                                         <td className="py-4 text-right text-rose-400 pr-2 whitespace-nowrap">R$ {fin.fees.toFixed(2)}</td>
                                         <td className={`py-4 text-right font-black pr-2 whitespace-nowrap ${sale.status === 'Cancelado' ? 'text-gray-500 line-through' : 'text-emerald-400'}`}>
                                             R$ {fin.netProfit.toFixed(2)}
