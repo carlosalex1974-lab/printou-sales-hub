@@ -2160,10 +2160,67 @@ app.get('/api/channels/tiktok/callback', async (req, res) => {
 // Endpoint Webhook do TikTok Shop para notificações em tempo real
 app.post('/api/webhooks/tiktokshop', async (req, res) => {
     console.log("=========================================");
-    console.log("🔔 [TIKTOK WEBHOOK] NOTIFICAÇÃO RECEBIDA");
+    console.log("🎟️ [TIKTOK WEBHOOK] NOTIFICAÇÃO RECEBIDA");
     console.log("Headers:", req.headers);
     console.log("Body:", JSON.stringify(req.body, null, 2));
     
+    // Processamento do Webhook
+    try {
+        const payload = req.body;
+        // TikTok Shop Order Status Change Event (type 1)
+        if (payload.type === 1 && payload.data && payload.data.order_id) {
+            const orderId = payload.data.order_id;
+            const status = payload.data.order_status;
+            
+            const db = await readDb();
+            const existingSale = db.sales.find(s => s.id === orderId || s.externalId === orderId);
+            
+            if (!existingSale) {
+                console.log(`[TIKTOK] Criando nova venda para o pedido ${orderId}`);
+                const newSale = {
+                    id: orderId,
+                    externalId: orderId,
+                    date: new Date().toISOString(),
+                    channelId: 'tiktok', // Assumindo que 'tiktok' existe
+                    productId: 'pendente_sincronizacao',
+                    quantity: 1,
+                    grossValue: 0,
+                    discount: 0,
+                    shipping: 0,
+                    status: (status === 'UNPAID' || status === '110') ? 'Pendente' : 'Pago',
+                    notes: 'Venda importada via Webhook do TikTok Shop. Sincronize os dados manuais ou atualize a integração para buscar os itens exatos.'
+                };
+                
+                db.sales.push(newSale);
+                
+                db.integrationLogs = db.integrationLogs || [];
+                db.integrationLogs.push({
+                    id: Date.now().toString(),
+                    date: new Date().toISOString(),
+                    type: 'info',
+                    message: `Nova venda do TikTok Shop recebida via Webhook (Pedido: ${orderId}).`
+                });
+                
+                await writeDb(db);
+                console.log(`[TIKTOK WEBHOOK] Venda ${orderId} registrada no sistema com sucesso!`);
+            } else {
+                console.log(`[TIKTOK WEBHOOK] Venda ${orderId} já existe no sistema. Atualizando status.`);
+                if (status === 'AWAITING_SHIPMENT' || status === '111' || status === '112') {
+                    existingSale.status = 'Pago';
+                } else if (status === 'SHIPPED' || status === '114') {
+                    existingSale.status = 'Enviado';
+                } else if (status === 'CANCELLED' || status === '121' || status === '122') {
+                    existingSale.status = 'Cancelado';
+                } else if (status === 'COMPLETED' || status === '130') {
+                    existingSale.status = 'Entregue';
+                }
+                await writeDb(db);
+            }
+        }
+    } catch (e) {
+        console.error("[TIKTOK WEBHOOK] Erro ao processar webhook:", e);
+    }
+
     // TikTok requer que você valide e responda 200 OK rapidamente
     res.status(200).json({ success: true });
 });
