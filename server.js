@@ -2157,17 +2157,72 @@ app.get('/api/channels/tiktok/callback', async (req, res) => {
     }
 });
 
+
+const crypto = require('crypto');
+
+// ==========================================
+// TIKTOK SHOP API FUNCTIONS
+// ==========================================
+function generateTikTokSignature(appSecret, path, queries, bodyString = '') {
+    const keys = Object.keys(queries).filter(k => k !== 'sign' && k !== 'access_token').sort();
+    let stringToSign = path;
+    for (const key of keys) {
+        stringToSign += `${key}${queries[key]}`;
+    }
+    stringToSign += bodyString;
+    return crypto.createHmac('sha256', appSecret).update(stringToSign).digest('hex');
+}
+
+async function fetchTikTokOrderDetails(orderId, creds) {
+    if (!creds || !creds.appKey || !creds.appSecret || !creds.accessToken) {
+        throw new Error("Credenciais do TikTok incompletas");
+    }
+
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const path = '/order/202309/orders';
+    const queries = {
+        app_key: creds.appKey,
+        timestamp: timestamp,
+        ids: orderId
+    };
+
+    const sign = generateTikTokSignature(creds.appSecret, path, queries, '');
+    const url = `https://open-api.tiktokglobalshop.com${path}?app_key=${creds.appKey}&timestamp=${timestamp}&ids=${orderId}&sign=${sign}`;
+
+    const fetch = (await import('node-fetch')).default || global.fetch;
+    const res = await fetch(url, {
+        method: 'GET',
+        headers: {
+            'x-tts-access-token': creds.accessToken,
+            'Content-Type': 'application/json'
+        }
+    });
+
+    const data = await res.json();
+    if (data.code !== 0) {
+        throw new Error(`Erro na API TikTok: ${JSON.stringify(data)}`);
+    }
+
+    const orderData = data.data && data.data.orders && data.data.orders[0];
+    if (!orderData) throw new Error("Pedido não encontrado na API do TikTok");
+
+    return {
+        grossValue: parseFloat(orderData.payment?.total_amount) || 0,
+        shipping: parseFloat(orderData.payment?.shipping_fee) || 0,
+        productId: (orderData.line_items && orderData.line_items.length > 0) ? orderData.line_items[0].product_id : 'tiktok_item',
+        quantity: (orderData.line_items && orderData.line_items.length > 0) ? orderData.line_items.reduce((acc, curr) => acc + (curr.quantity||1), 0) : 1,
+        title: (orderData.line_items && orderData.line_items.length > 0) ? orderData.line_items[0].product_name : 'Produto TikTok',
+        buyer: orderData.buyer_email || orderData.buyer_message || 'Comprador TikTok'
+    };
+}
+
 // Endpoint Webhook do TikTok Shop para notificações em tempo real
 app.post('/api/webhooks/tiktokshop', async (req, res) => {
     console.log("=========================================");
     console.log("🎟️ [TIKTOK WEBHOOK] NOTIFICAÇÃO RECEBIDA");
-    console.log("Headers:", req.headers);
-    console.log("Body:", JSON.stringify(req.body, null, 2));
     
-    // Processamento do Webhook
     try {
         const payload = req.body;
-        // TikTok Shop Order Status Change Event (type 1)
         if (payload.type === 1 && payload.data && payload.data.order_id) {
             const orderId = payload.data.order_id;
             const status = payload.data.order_status;
@@ -2176,19 +2231,32 @@ app.post('/api/webhooks/tiktokshop', async (req, res) => {
             const existingSale = db.sales.find(s => s.id === orderId || s.externalId === orderId);
             
             if (!existingSale) {
-                console.log(`[TIKTOK] Criando nova venda para o pedido ${orderId}`);
+                console.log(`[TIKTOK] Buscando detalhes do pedido ${orderId} via API...`);
+                const creds = await getTikTokShopCredentials();
+                
+                let orderDetails = { grossValue: 0, shipping: 0, productId: 'pendente_sincronizacao', quantity: 1 };
+                let fetchSuccess = false;
+                
+                try {
+                    orderDetails = await fetchTikTokOrderDetails(orderId, creds);
+                    fetchSuccess = true;
+                    console.log(`[TIKTOK] Dados do pedido ${orderId} obtidos com sucesso!`);
+                } catch (apiErr) {
+                    console.error(`[TIKTOK] Falha ao buscar API, usando fallback. Erro:`, apiErr.message);
+                }
+
                 const newSale = {
                     id: orderId,
                     externalId: orderId,
                     date: new Date().toISOString(),
-                    channelId: 'tiktok', // Assumindo que 'tiktok' existe
-                    productId: 'pendente_sincronizacao',
-                    quantity: 1,
-                    grossValue: 0,
+                    channelId: 'tiktok',
+                    productId: orderDetails.productId,
+                    quantity: orderDetails.quantity,
+                    grossValue: orderDetails.grossValue,
                     discount: 0,
-                    shipping: 0,
+                    shipping: orderDetails.shipping,
                     status: (status === 'UNPAID' || status === '110') ? 'Pendente' : 'Pago',
-                    notes: 'Venda importada via Webhook do TikTok Shop. Sincronize os dados manuais ou atualize a integração para buscar os itens exatos.'
+                    notes: fetchSuccess ? `Produto: ${orderDetails.title}` : 'Venda importada via Webhook. Erro ao buscar detalhes da API (verifique as credenciais do TikTok).'
                 };
                 
                 db.sales.push(newSale);
@@ -2197,23 +2265,18 @@ app.post('/api/webhooks/tiktokshop', async (req, res) => {
                 db.integrationLogs.push({
                     id: Date.now().toString(),
                     date: new Date().toISOString(),
-                    type: 'info',
-                    message: `Nova venda do TikTok Shop recebida via Webhook (Pedido: ${orderId}).`
+                    type: fetchSuccess ? 'success' : 'warning',
+                    message: fetchSuccess ? `Venda do TikTok ${orderId} sincronizada com sucesso (${orderDetails.title})` : `Venda do TikTok ${orderId} recebida, mas falhou ao buscar detalhes na API.`
                 });
                 
                 await writeDb(db);
-                console.log(`[TIKTOK WEBHOOK] Venda ${orderId} registrada no sistema com sucesso!`);
+                console.log(`[TIKTOK WEBHOOK] Venda ${orderId} registrada no sistema!`);
             } else {
-                console.log(`[TIKTOK WEBHOOK] Venda ${orderId} já existe no sistema. Atualizando status.`);
-                if (status === 'AWAITING_SHIPMENT' || status === '111' || status === '112') {
-                    existingSale.status = 'Pago';
-                } else if (status === 'SHIPPED' || status === '114') {
-                    existingSale.status = 'Enviado';
-                } else if (status === 'CANCELLED' || status === '121' || status === '122') {
-                    existingSale.status = 'Cancelado';
-                } else if (status === 'COMPLETED' || status === '130') {
-                    existingSale.status = 'Entregue';
-                }
+                if (status === 'AWAITING_SHIPMENT' || status === '111' || status === '112') existingSale.status = 'Pago';
+                else if (status === 'SHIPPED' || status === '114') existingSale.status = 'Enviado';
+                else if (status === 'CANCELLED' || status === '121' || status === '122') existingSale.status = 'Cancelado';
+                else if (status === 'COMPLETED' || status === '130') existingSale.status = 'Entregue';
+                
                 await writeDb(db);
             }
         }
@@ -2221,9 +2284,9 @@ app.post('/api/webhooks/tiktokshop', async (req, res) => {
         console.error("[TIKTOK WEBHOOK] Erro ao processar webhook:", e);
     }
 
-    // TikTok requer que você valide e responda 200 OK rapidamente
-    res.status(200).json({ success: true });
+    res.status(200).json({ success: true, message: "Webhook processado" });
 });
+
 
 
 
