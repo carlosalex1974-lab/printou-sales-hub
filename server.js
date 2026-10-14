@@ -82,7 +82,8 @@ const DEFAULT_DB = {
         shopee: { shopId: '', apiKey: '', webhookUrl: 'http://localhost:3001/api/webhooks/shopee', status: 'Não Sincronizado' },
         site: { apiKey: '', apiSecret: '', webhookUrl: 'http://localhost:3001/api/webhooks/site', status: 'Não Sincronizado' },
         facebook: { accessToken: '', pageId: '1117637594770324', businessId: '1550133536629313', catalogId: '', status: 'Não Sincronizado' },
-        tiny: { token: '', status: 'Não Sincronizado' }
+        tiny: { token: '', status: 'Não Sincronizado' },
+        bling: { clientId: '63a2a2533ac106884f0781ab68a657a8d60a1143', clientSecret: 'd85edbaa46bd2878a94756749a3a0fbd90f019deb226b497c9f126b70aad', accessToken: '', refreshToken: '', expiresAt: null, status: 'Pendente' }
     },
     users: [
         { email: 'admin@printou.com', password: 'admin123', name: 'Administrador Printou', role: 'admin' },
@@ -2336,6 +2337,298 @@ async function sanitizeMongoSalesOnStartup() {
         console.error('[STARTUP-CLEAN] Erro na limpeza inicial:', e.message);
     }
 }
+
+
+// ==========================================
+// INTEGRAÇÃO BLING ERP (API V3 - OAUTH 2.0)
+// ==========================================
+
+async function getBlingCredentials() {
+    const db = await readDb();
+    if (!db.credentials) db.credentials = {};
+    if (!db.credentials.bling) {
+        db.credentials.bling = {
+            clientId: '63a2a2533ac106884f0781ab68a657a8d60a1143',
+            clientSecret: 'd85edbaa46bd2878a94756749a3a0fbd90f019deb226b497c9f126b70aad',
+            accessToken: '',
+            refreshToken: '',
+            expiresAt: null,
+            status: 'Pendente'
+        };
+        await writeDb(db);
+    }
+    return db.credentials.bling;
+}
+
+async function getBlingValidAccessToken() {
+    const db = await readDb();
+    const bling = db.credentials?.bling;
+    if (!bling || !bling.clientId || !bling.clientSecret) {
+        throw new Error("Credenciais do Bling não configuradas.");
+    }
+    if (!bling.accessToken) {
+        throw new Error("Conta do Bling ainda não foi autorizada. Clique em 'Conectar com Bling'.");
+    }
+
+    // Se o token ainda é válido (com margem de 5 minutos), retorna ele
+    if (bling.expiresAt && Date.now() < (bling.expiresAt - 300000)) {
+        return bling.accessToken;
+    }
+
+    // Se expirou e temos refresh_token, faz a renovação automática
+    if (bling.refreshToken) {
+        console.log("[BLING] Renovando Access Token expirado via Refresh Token...");
+        const basicAuth = Buffer.from(`${bling.clientId}:${bling.clientSecret}`).toString('base64');
+        const fetch = (await import('node-fetch')).default || global.fetch;
+
+        const res = await fetch('https://www.bling.com.br/Api/v3/oauth/token', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Basic ${basicAuth}`,
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Accept': 'application/json'
+            },
+            body: new URLSearchParams({
+                grant_type: 'refresh_token',
+                refresh_token: bling.refreshToken
+            })
+        });
+
+        const tokenData = await res.json();
+        if (tokenData.access_token) {
+            bling.accessToken = tokenData.access_token;
+            if (tokenData.refresh_token) bling.refreshToken = tokenData.refresh_token;
+            bling.expiresAt = Date.now() + (tokenData.expires_in * 1000);
+            bling.status = 'Conectado';
+            await writeDb(db);
+            console.log("[BLING] Token renovado com sucesso!");
+            return bling.accessToken;
+        } else {
+            console.error("[BLING] Falha ao renovar token:", tokenData);
+            throw new Error("Sessão do Bling expirou. Por favor, reconecte sua conta do Bling.");
+        }
+    }
+
+    return bling.accessToken;
+}
+
+// Salvar configurações manuais do Bling
+app.post('/api/settings/bling', async (req, res) => {
+    try {
+        const { clientId, clientSecret } = req.body;
+        const db = await readDb();
+        if (!db.credentials) db.credentials = {};
+        db.credentials.bling = {
+            ...(db.credentials.bling || {}),
+            clientId: clientId || db.credentials.bling?.clientId,
+            clientSecret: clientSecret || db.credentials.bling?.clientSecret
+        };
+        await writeDb(db);
+        res.json({ success: true, message: "Configurações do Bling salvas!" });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Endpoint Callback OAuth 2.0 do Bling
+app.get('/api/auth/bling/callback', async (req, res) => {
+    const { code, error, error_description } = req.query;
+
+    if (error) {
+        console.error("[BLING CALLBACK ERROR]:", error, error_description);
+        return res.status(400).send(`Erro na autorização do Bling: ${error_description || error}`);
+    }
+
+    if (!code) {
+        return res.status(400).send("Código de autorização não recebido do Bling.");
+    }
+
+    try {
+        console.log("[BLING] Trocando código de autorização por Access Token...");
+        const db = await readDb();
+        const bling = db.credentials?.bling || await getBlingCredentials();
+
+        const basicAuth = Buffer.from(`${bling.clientId}:${bling.clientSecret}`).toString('base64');
+        const fetch = (await import('node-fetch')).default || global.fetch;
+
+        const tokenRes = await fetch('https://www.bling.com.br/Api/v3/oauth/token', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Basic ${basicAuth}`,
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Accept': 'application/json'
+            },
+            body: new URLSearchParams({
+                grant_type: 'authorization_code',
+                code: code
+            })
+        });
+
+        const tokenData = await tokenRes.json();
+        console.log("[BLING TOKEN RESPONSE]:", tokenData);
+
+        if (tokenData.access_token) {
+            bling.accessToken = tokenData.access_token;
+            bling.refreshToken = tokenData.refresh_token;
+            bling.expiresAt = Date.now() + (tokenData.expires_in * 1000);
+            bling.status = 'Conectado';
+
+            db.integrationLogs = db.integrationLogs || [];
+            db.integrationLogs.push({
+                id: Date.now().toString(),
+                date: new Date().toISOString(),
+                type: 'success',
+                message: "Bling ERP conectado com sucesso via OAuth 2.0!"
+            });
+
+            await writeDb(db);
+            console.log("[BLING] Sucesso! Conta conectada e salva no MongoDB.");
+
+            // Redireciona de volta para a plataforma com aviso de sucesso
+            return res.send(`
+                <html>
+                <body style="background:#09090b;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;">
+                    <div style="background:#18181b;padding:40px;border-radius:16px;border:1px solid #27272a;text-align:center;max-width:400px;">
+                        <h2 style="color:#22c55e;margin-top:0;">🎉 Bling Conectado!</h2>
+                        <p style="color:#a1a1aa;font-size:14px;">Sua conta do Bling ERP foi conectada com sucesso ao Printou Sales Hub.</p>
+                        <p style="color:#71717a;font-size:12px;">Redirecionando de volta ao painel...</p>
+                        <script>
+                            setTimeout(() => { window.location.href = '/'; }, 2000);
+                        </script>
+                    </div>
+                </body>
+                </html>
+            `);
+        } else {
+            console.error("[BLING] Resposta inesperada ao obter token:", tokenData);
+            return res.status(500).send(`Erro ao obter token do Bling: ${JSON.stringify(tokenData)}`);
+        }
+    } catch (err) {
+        console.error("[BLING] Erro fatal no callback:", err);
+        res.status(500).send(`Erro ao processar callback do Bling: ${err.message}`);
+    }
+});
+
+// Endpoint para Sincronizar Pedidos do Bling em tempo real
+app.post('/api/bling/sync-orders', async (req, res) => {
+    try {
+        console.log("[BLING SYNC] Iniciando sincronização de pedidos...");
+        const accessToken = await getBlingValidAccessToken();
+        const fetch = (await import('node-fetch')).default || global.fetch;
+
+        // Busca os últimos 100 pedidos no Bling (ordenados pelos mais recentes)
+        const blingRes = await fetch('https://www.bling.com.br/Api/v3/pedidos/vendas?limite=100', {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Accept': 'application/json'
+            }
+        });
+
+        const blingData = await blingRes.json();
+        if (blingData.error) {
+            return res.status(400).json({ error: `Erro na API do Bling: ${JSON.stringify(blingData.error)}` });
+        }
+
+        const orders = blingData.data || [];
+        console.log(`[BLING SYNC] ${orders.length} pedidos encontrados no Bling.`);
+
+        const db = await readDb();
+        db.sales = db.sales || [];
+        let newSalesCount = 0;
+        let updatedCount = 0;
+
+        for (const order of orders) {
+            const externalId = String(order.numeroLoja || order.numero || order.id);
+            const orderIdStr = String(order.id);
+
+            // Identificação inteligente do canal
+            let channelId = 'site';
+            const rawLoja = String(order.loja?.id || '');
+            const rawObs = String(order.observacoes || '').toLowerCase();
+            const rawNum = String(order.numeroLoja || '');
+
+            if (rawObs.includes('tiktok') || rawNum.startsWith('57') || rawLoja.includes('tiktok')) {
+                channelId = 'tiktok';
+            } else if (rawObs.includes('mercado') || rawObs.includes('meli') || rawNum.length >= 16 || rawLoja.includes('ml')) {
+                channelId = 'ml1';
+            } else if (rawObs.includes('shopee') || rawLoja.includes('shopee')) {
+                channelId = 'shopee';
+            }
+
+            // Mapeamento de status
+            let saleStatus = 'Pago';
+            const situacao = order.situacao?.valor || '';
+            if (situacao === 'Atendido' || situacao === 'Concluído') saleStatus = 'Entregue';
+            else if (situacao === 'Cancelado') saleStatus = 'Cancelado';
+            else if (situacao === 'Em andamento' || situacao === 'Em digitação') saleStatus = 'Pago';
+
+            const existingSale = db.sales.find(s => s.id === orderIdStr || s.externalId === externalId || s.id === externalId);
+
+            if (!existingSale) {
+                const newSale = {
+                    id: orderIdStr,
+                    externalId: externalId,
+                    date: order.data ? new Date(order.data).toISOString() : new Date().toISOString(),
+                    channelId: channelId,
+                    productId: 'bling_item',
+                    quantity: 1,
+                    grossValue: parseFloat(order.total) || 0,
+                    discount: parseFloat(order.desconto?.valor) || 0,
+                    shipping: parseFloat(order.transporte?.frete) || 0,
+                    status: saleStatus,
+                    notes: `Cliente: ${order.contato?.nome || 'Cliente Bling'} | Pedido Bling: #${order.numero}`
+                };
+                db.sales.unshift(newSale);
+                newSalesCount++;
+            } else {
+                // Atualiza status se mudou
+                if (existingSale.status !== saleStatus) {
+                    existingSale.status = saleStatus;
+                    updatedCount++;
+                }
+            }
+        }
+
+        db.integrationLogs = db.integrationLogs || [];
+        db.integrationLogs.push({
+            id: Date.now().toString(),
+            date: new Date().toISOString(),
+            type: 'info',
+            message: `Sincronização do Bling concluída: ${newSalesCount} novas vendas importadas, ${updatedCount} atualizadas (Total de ${orders.length} pedidos no Bling).`
+        });
+
+        await writeDb(db);
+        console.log(`[BLING SYNC] Concluído! ${newSalesCount} novas vendas adicionadas.`);
+
+        res.json({
+            success: true,
+            newSalesCount,
+            updatedCount,
+            totalFound: orders.length,
+            message: `Sincronização concluída: ${newSalesCount} novas vendas importadas do Bling!`
+        });
+
+    } catch (err) {
+        console.error("[BLING SYNC ERROR]:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Endpoint para consultar status do Bling
+app.get('/api/bling/status', async (req, res) => {
+    try {
+        const db = await readDb();
+        const bling = db.credentials?.bling || {};
+        res.json({
+            connected: !!(bling.accessToken && bling.status === 'Conectado'),
+            status: bling.status || 'Pendente',
+            clientId: bling.clientId || '63a2a2533ac106884f0781ab68a657a8d60a1143'
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
 
 app.listen(PORT, () => {
     console.log(`\n======================================================`);

@@ -4184,6 +4184,9 @@
             const [siteApiKey, setSiteApiKey] = useState(credentials?.site?.apiKey || '');
             const [siteApiSecret, setSiteApiSecret] = useState(credentials?.site?.apiSecret || '');
             const [tinyToken, setTinyToken] = useState(credentials?.tiny?.token || '');
+            const [blingClientId, setBlingClientId] = useState(credentials?.bling?.clientId || '63a2a2533ac106884f0781ab68a657a8d60a1143');
+            const [blingClientSecret, setBlingClientSecret] = useState(credentials?.bling?.clientSecret || 'd85edbaa46bd2878a94756749a3a0fbd90f019deb226b497c9f126b70aad');
+            const [blingSyncing, setBlingSyncing] = useState(false);
 
             const [payloadStr, setPayloadStr] = useState('');
 
@@ -4283,7 +4286,15 @@
                                 webhookUrl: `${window.location.origin}/api/webhooks/site`,
                                 status: 'Sincronizado'
                             },
-                            tiny: { token: tinyToken }
+                            tiny: { token: tinyToken },
+                            bling: {
+                                clientId: blingClientId,
+                                clientSecret: blingClientSecret,
+                                accessToken: credentials?.bling?.accessToken || '',
+                                refreshToken: credentials?.bling?.refreshToken || '',
+                                expiresAt: credentials?.bling?.expiresAt || null,
+                                status: credentials?.bling?.status || 'Pendente'
+                            }
                         };
                         
                         const saveRes = await fetch('/api/data', {
@@ -4298,6 +4309,30 @@
                     }
                 } catch (err) {
                     alert('Erro ao salvar configurações.');
+                }
+            };
+
+            const handleAuthBling = () => {
+                const clientId = blingClientId || '63a2a2533ac106884f0781ab68a657a8d60a1143';
+                const authUrl = `https://www.bling.com.br/Api/v3/oauth/authorize?response_type=code&client_id=${clientId}&state=bling`;
+                window.location.href = authUrl;
+            };
+
+            const handleSyncBlingOrders = async () => {
+                setBlingSyncing(true);
+                try {
+                    const res = await fetch('/api/bling/sync-orders', { method: 'POST' });
+                    const data = await res.json();
+                    if (data.success) {
+                        alert(data.message || 'Sincronização concluída com sucesso!');
+                        window.location.reload();
+                    } else {
+                        alert('Aviso: ' + (data.error || 'Verifique se a conta do Bling está conectada.'));
+                    }
+                } catch (e) {
+                    alert('Erro de comunicação ao sincronizar pedidos do Bling.');
+                } finally {
+                    setBlingSyncing(false);
                 }
             };
 
@@ -4542,33 +4577,64 @@
                     </div>
 
                     
-                {/* Tiny ERP Card */}
-                <div className="glass-panel p-6 rounded-2xl border border-white/5 space-y-4 bg-blue-500/5">
+                
+                {/* Bling ERP Card */}
+                <div className="glass-panel p-6 rounded-2xl border border-emerald-500/20 space-y-4 bg-emerald-500/5">
                     <div className="flex justify-between items-center border-b border-white/5 pb-3">
-                        <span className="text-lg font-black text-blue-400 flex items-center gap-2">
-                            <i data-lucide="file-text" className="w-5 h-5"></i>
-                            Tiny ERP (NFe)
+                        <span className="text-lg font-black text-emerald-400 flex items-center gap-2">
+                            <i data-lucide="layers" className="w-5 h-5 text-emerald-400"></i>
+                            Bling ERP (Cérebro Multicanal)
                         </span>
-                        <span className="text-[10px] bg-emerald-500/10 text-emerald-400 font-extrabold px-3 py-1 rounded-full uppercase tracking-wider flex items-center gap-1.5">
-                            Ativo (Produção)
+                        <span className={`text-[10px] font-extrabold px-3 py-1 rounded-full uppercase tracking-wider flex items-center gap-1.5 ${credentials?.bling?.status === 'Conectado' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}`}>
+                            {credentials?.bling?.status === 'Conectado' ? '● Conectado (Ativo)' : '○ Pendente Conexão'}
                         </span>
                     </div>
 
                     <div className="space-y-3 text-xs">
                         <div className="space-y-1">
                             <span className="text-gray-400 font-bold uppercase block">Como funciona</span>
-                            <p className="text-[10px] text-gray-500">Ao clicar no botão de NFe na aba de Vendas, o sistema irá buscar o pedido no Tiny e emitir a nota fiscal automaticamente, retornando o PDF.</p>
+                            <p className="text-[10px] text-gray-400 leading-relaxed">
+                                O Bling recebe automaticamente suas vendas do <strong>Mercado Livre</strong>, <strong>Shopee</strong> e <strong>TikTok Shop</strong>. Clique no botão de conexão para autorizar o acesso da sua conta e, depois, clique em sincronizar para puxar todas as vendas para cá!
+                            </p>
                         </div>
-                        <div className="space-y-1">
-                            <span className="text-gray-400 font-bold uppercase block">Token da API (V2)</span>
-                            <input
-                                type="password" value={tinyToken} onChange={e => setTinyToken(e.target.value)}
-                                placeholder="Insira o seu token (Ex: e63cb57992...)"
-                                className="w-full bg-[#121215] border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:border-blue-500 focus:outline-none transition-colors"
-                            />
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                                <span className="text-gray-400 font-bold uppercase block">Client ID</span>
+                                <input
+                                    type="text" value={blingClientId} onChange={e => setBlingClientId(e.target.value)}
+                                    className="w-full bg-[#121215] border border-white/10 rounded-xl px-4 py-2 text-white text-xs font-mono focus:border-emerald-500 focus:outline-none transition-colors"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <span className="text-gray-400 font-bold uppercase block">Client Secret</span>
+                                <input
+                                    type="password" value={blingClientSecret} onChange={e => setBlingClientSecret(e.target.value)}
+                                    className="w-full bg-[#121215] border border-white/10 rounded-xl px-4 py-2 text-white text-xs font-mono focus:border-emerald-500 focus:outline-none transition-colors"
+                                />
+                            </div>
+                        </div>
+                        <div className="pt-2 flex flex-wrap gap-2">
+                            <button
+                                type="button"
+                                onClick={handleAuthBling}
+                                className="flex-1 py-2.5 px-4 bg-emerald-500 hover:bg-emerald-600 text-black font-extrabold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/10"
+                            >
+                                <i data-lucide="link" className="w-4 h-4"></i>
+                                {credentials?.bling?.status === 'Conectado' ? 'Reconectar com Bling' : 'Conectar Conta do Bling'}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleSyncBlingOrders}
+                                disabled={blingSyncing}
+                                className="py-2.5 px-5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2"
+                            >
+                                <i data-lucide="refresh-cw" className={`w-4 h-4 ${blingSyncing ? 'animate-spin' : ''}`}></i>
+                                {blingSyncing ? 'Sincronizando...' : '🔄 Sincronizar Vendas'}
+                            </button>
                         </div>
                     </div>
                 </div>
+
 
                     
                 {/* Tiny ERP Card */}
