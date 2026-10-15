@@ -1,4 +1,5 @@
 import express from 'express';
+import crypto from 'crypto';
 import cors from 'cors';
 import fs from 'fs';
 import { MongoClient } from 'mongodb';
@@ -2159,7 +2160,7 @@ app.get('/api/channels/tiktok/callback', async (req, res) => {
 });
 
 
-const crypto = require('crypto');
+// crypto imported at top
 
 // ==========================================
 // TIKTOK SHOP API FUNCTIONS
