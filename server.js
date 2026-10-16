@@ -183,6 +183,9 @@ async function saveDb(updateData) {
     }
 }
 
+// Alias para compatibilidade
+const writeDb = saveDb;
+
 // Endpoint para listar fechamentos mensais
 app.get('/api/monthly-closings', async (req, res) => {
     try {
@@ -2271,7 +2274,7 @@ app.post('/api/webhooks/tiktokshop', async (req, res) => {
                     message: fetchSuccess ? `Venda do TikTok ${orderId} sincronizada com sucesso (${orderDetails.title})` : `Venda do TikTok ${orderId} recebida, mas falhou ao buscar detalhes na API.`
                 });
                 
-                await writeDb(db);
+                await saveDb(db);
                 console.log(`[TIKTOK WEBHOOK] Venda ${orderId} registrada no sistema!`);
             } else {
                 if (status === 'AWAITING_SHIPMENT' || status === '111' || status === '112') existingSale.status = 'Pago';
@@ -2279,7 +2282,7 @@ app.post('/api/webhooks/tiktokshop', async (req, res) => {
                 else if (status === 'CANCELLED' || status === '121' || status === '122') existingSale.status = 'Cancelado';
                 else if (status === 'COMPLETED' || status === '130') existingSale.status = 'Entregue';
                 
-                await writeDb(db);
+                await saveDb(db);
             }
         }
     } catch (e) {
@@ -2356,7 +2359,7 @@ async function getBlingCredentials() {
             expiresAt: null,
             status: 'Pendente'
         };
-        await writeDb(db);
+        await saveDb(db);
     }
     return db.credentials.bling;
 }
@@ -2379,7 +2382,9 @@ async function getBlingValidAccessToken() {
     // Se expirou e temos refresh_token, faz a renovação automática
     if (bling.refreshToken) {
         console.log("[BLING] Renovando Access Token expirado via Refresh Token...");
-        const basicAuth = Buffer.from(`${bling.clientId}:${bling.clientSecret}`).toString('base64');
+        const clientId = bling?.clientId || '63a2a2533ac106884f0781ab68a657a8d60a1143';
+        const clientSecret = bling?.clientSecret || 'd85edbaa46bd2878a94756749a3a0fbd90f019deb226b497c9f126b70aad';
+        const basicAuth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
         const fetch = (await import('node-fetch')).default || global.fetch;
 
         const res = await fetch('https://www.bling.com.br/Api/v3/oauth/token', {
@@ -2401,7 +2406,7 @@ async function getBlingValidAccessToken() {
             if (tokenData.refresh_token) bling.refreshToken = tokenData.refresh_token;
             bling.expiresAt = Date.now() + (tokenData.expires_in * 1000);
             bling.status = 'Conectado';
-            await writeDb(db);
+            await saveDb(db);
             console.log("[BLING] Token renovado com sucesso!");
             return bling.accessToken;
         } else {
@@ -2424,7 +2429,7 @@ app.post('/api/settings/bling', async (req, res) => {
             clientId: clientId || db.credentials.bling?.clientId,
             clientSecret: clientSecret || db.credentials.bling?.clientSecret
         };
-        await writeDb(db);
+        await saveDb(db);
         res.json({ success: true, message: "Configurações do Bling salvas!" });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -2449,7 +2454,9 @@ app.get('/api/auth/bling/callback', async (req, res) => {
         const db = await readDb();
         const bling = db.credentials?.bling || await getBlingCredentials();
 
-        const basicAuth = Buffer.from(`${bling.clientId}:${bling.clientSecret}`).toString('base64');
+        const clientId = bling?.clientId || '63a2a2533ac106884f0781ab68a657a8d60a1143';
+        const clientSecret = bling?.clientSecret || 'd85edbaa46bd2878a94756749a3a0fbd90f019deb226b497c9f126b70aad';
+        const basicAuth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
         const fetch = (await import('node-fetch')).default || global.fetch;
 
         const tokenRes = await fetch('https://www.bling.com.br/Api/v3/oauth/token', {
@@ -2482,7 +2489,7 @@ app.get('/api/auth/bling/callback', async (req, res) => {
                 message: "Bling ERP conectado com sucesso via OAuth 2.0!"
             });
 
-            await writeDb(db);
+            await saveDb(db);
             console.log("[BLING] Sucesso! Conta conectada e salva no MongoDB.");
 
             // Redireciona de volta para a plataforma com aviso de sucesso
@@ -2599,7 +2606,7 @@ app.post('/api/bling/sync-orders', async (req, res) => {
             message: `Sincronização do Bling concluída: ${newSalesCount} novas vendas importadas, ${updatedCount} atualizadas (Total de ${orders.length} pedidos no Bling).`
         });
 
-        await writeDb(db);
+        await saveDb(db);
         console.log(`[BLING SYNC] Concluído! ${newSalesCount} novas vendas adicionadas.`);
 
         res.json({

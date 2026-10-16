@@ -2773,16 +2773,7 @@
                                                     </span>
                                                 ) : (
                                                     <>
-                                                                                                                {sale.channelId && sale.channelId.startsWith('ml') && (
-                                                        <button
-                                                            id={`btn-nfe-${sale.id}`}
-                                                            onClick={() => handleEmitirNfeTiny(sale)}
-                                                            className="p-1.5 hover:bg-blue-500/20 rounded-lg text-gray-400 hover:text-blue-400 mr-1"
-                                                            title="Emitir NF-e via Tiny ERP"
-                                                        >
-                                                            🖨️
-                                                        </button>
-                                                        )}
+                                                                                                                
 <button 
                                                             onClick={() => {
                                                             try { window.scrollTo(0, 0); const mainEl = document.querySelector("main") || document.querySelector(".overflow-y-auto"); if (mainEl) mainEl.scrollTop = 0; } catch(e){}
