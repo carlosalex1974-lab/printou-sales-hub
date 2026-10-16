@@ -2130,7 +2130,8 @@ app.get('/api/channels/tiktok/callback', async (req, res) => {
         }
 
         const tokenUrl = `https://auth.tiktok-shops.com/api/v2/token/get?app_key=${creds.appKey}&app_secret=${creds.appSecret}&auth_code=${code}&grant_type=authorized_code`;
-        const fetch = (await import('node-fetch')).default || global.fetch;
+        // Fetch nativo global do Node 24
+        const fetch = globalThis.fetch;
         const tokenRes = await fetch(tokenUrl);
         const tokenData = await tokenRes.json();
 
@@ -2194,7 +2195,8 @@ async function fetchTikTokOrderDetails(orderId, creds) {
     const sign = generateTikTokSignature(creds.appSecret, path, queries, '');
     const url = `https://open-api.tiktokglobalshop.com${path}?app_key=${creds.appKey}&timestamp=${timestamp}&ids=${orderId}&sign=${sign}`;
 
-    const fetch = (await import('node-fetch')).default || global.fetch;
+    // Fetch nativo global do Node 24
+        const fetch = globalThis.fetch;
     const res = await fetch(url, {
         method: 'GET',
         headers: {
@@ -2385,7 +2387,8 @@ async function getBlingValidAccessToken() {
         const clientId = bling?.clientId || '63a2a2533ac106884f0781ab68a657a8d60a1143';
         const clientSecret = bling?.clientSecret || 'd85edbaa46bd2878a94756749a3a0fbd90f019deb226b497c9f126b70aad';
         const basicAuth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
-        const fetch = (await import('node-fetch')).default || global.fetch;
+        // Fetch nativo global do Node 24
+        const fetch = globalThis.fetch;
 
         const res = await fetch('https://www.bling.com.br/Api/v3/oauth/token', {
             method: 'POST',
@@ -2457,7 +2460,8 @@ app.get('/api/auth/bling/callback', async (req, res) => {
         const clientId = bling?.clientId || '63a2a2533ac106884f0781ab68a657a8d60a1143';
         const clientSecret = bling?.clientSecret || 'd85edbaa46bd2878a94756749a3a0fbd90f019deb226b497c9f126b70aad';
         const basicAuth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
-        const fetch = (await import('node-fetch')).default || global.fetch;
+        // Fetch nativo global do Node 24
+        const fetch = globalThis.fetch;
 
         const tokenRes = await fetch('https://www.bling.com.br/Api/v3/oauth/token', {
             method: 'POST',
@@ -2522,7 +2526,8 @@ app.post('/api/bling/sync-orders', async (req, res) => {
     try {
         console.log("[BLING SYNC] Iniciando sincronização de pedidos...");
         const accessToken = await getBlingValidAccessToken();
-        const fetch = (await import('node-fetch')).default || global.fetch;
+        // Fetch nativo global do Node 24
+        const fetch = globalThis.fetch;
 
         // Busca os últimos 100 pedidos no Bling (ordenados pelos mais recentes)
         const blingRes = await fetch('https://www.bling.com.br/Api/v3/pedidos/vendas?limite=100', {
