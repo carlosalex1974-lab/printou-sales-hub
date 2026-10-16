@@ -2595,18 +2595,69 @@ app.post('/api/bling/sync-orders', async (req, res) => {
             const existingSale = db.sales.find(s => s.id === orderIdStr || s.externalId === externalId || s.id === externalId);
 
             if (!existingSale) {
+                // Buscar detalhes dos itens do pedido no Bling para pegar o produto real
+                let itemDesc = '';
+                let itemSku = '';
+                let itemQty = 1;
+
+                try {
+                    const detailRes = await fetch(`https://api.bling.com.br/Api/v3/pedidos/vendas/${orderIdStr}`, {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${accessToken}`,
+                            'Accept': 'application/json'
+                        }
+                    });
+                    if (detailRes.ok) {
+                        const detailData = await detailRes.json();
+                        const firstItem = detailData.data?.itens?.[0];
+                        if (firstItem) {
+                            itemDesc = firstItem.descricao || '';
+                            itemSku = String(firstItem.codigo || '').trim();
+                            itemQty = parseInt(firstItem.quantidade) || 1;
+                        }
+                    }
+                    await new Promise(r => setTimeout(r, 350));
+                } catch(e) {
+                    console.error("[BLING SYNC] Erro ao buscar itens do pedido:", e.message);
+                }
+
+                // Identifica ou cria o produto correto no catálogo
+                let matchedProd = db.products.find(p => 
+                    (itemSku && p.id === itemSku) ||
+                    (itemSku && p.externalIds && p.externalIds.includes(itemSku)) ||
+                    (itemDesc && p.name && p.name.toLowerCase().includes(itemDesc.slice(0, 25).toLowerCase()))
+                );
+
+                if (!matchedProd && itemDesc) {
+                    const is3d = itemDesc.toLowerCase().includes('natal') || itemDesc.toLowerCase().includes('noel') || itemDesc.toLowerCase().includes('decor') || itemDesc.toLowerCase().includes('vaso');
+                    matchedProd = {
+                        id: itemSku || ('ITEM-' + Date.now().toString().slice(-6)),
+                        name: itemDesc,
+                        type: is3d ? 'print' : 'resale',
+                        acquisitionCost: is3d ? 3.50 : 74.00,
+                        price: parseFloat(order.total) || 0,
+                        stock: is3d ? 0 : 5,
+                        alertThreshold: is3d ? 0 : 2,
+                        supplierId: is3d ? 'Produção Própria 3D' : 'Bling ERP'
+                    };
+                    db.products.push(matchedProd);
+                }
+
+                const shippingVal = channelId === 'tiktok' ? 0 : (parseFloat(order.transporte?.frete) || 0);
+
                 const newSale = {
                     id: orderIdStr,
                     externalId: externalId,
                     date: order.data ? new Date(order.data).toISOString() : new Date().toISOString(),
                     channelId: channelId,
-                    productId: (db.products && db.products.length > 0) ? db.products[0].id : 'bling_item',
-                    quantity: 1,
+                    productId: matchedProd ? matchedProd.id : ((db.products && db.products.length > 0) ? db.products[0].id : 'bling_item'),
+                    quantity: itemQty,
                     grossValue: parseFloat(order.total) || 0,
                     discount: parseFloat(order.desconto?.valor) || 0,
-                    shipping: parseFloat(order.transporte?.frete) || 0,
+                    shipping: shippingVal,
                     status: saleStatus,
-                    notes: `Cliente: ${order.contato?.nome || 'Cliente Bling'} | Pedido Bling: #${order.numero}`
+                    notes: `Cliente: ${order.contato?.nome || 'Cliente Bling'} | Item: ${itemDesc || 'Item Bling'} | Pedido Bling: #${order.numero}`
                 };
                 db.sales.unshift(newSale);
                 newSalesCount++;
@@ -2618,6 +2669,10 @@ app.post('/api/bling/sync-orders', async (req, res) => {
                 }
                 if (existingSale.channelId !== channelId) {
                     existingSale.channelId = channelId;
+                    updatedCount++;
+                }
+                if (channelId === 'tiktok' && (existingSale.shipping === '21.15' || existingSale.shipping === 21.15)) {
+                    existingSale.shipping = 0;
                     updatedCount++;
                 }
             }
