@@ -6293,28 +6293,48 @@
                 });
             }, [products, search, filterType, filterLowStock]);
 
-            const totalItems = products.reduce((acc, p) => acc + (parseInt(p.stock) || 0), 0);
-            const totalInvested = products.reduce((acc, p) => acc + ((parseInt(p.stock) || 0) * (calculateCost ? calculateCost(p) : 0)), 0);
+            const [syncingBling, setSyncingBling] = useState(false);
 
-            const handlePullStock = async () => {
+            const resaleProducts = useMemo(() => products.filter(p => p.type === 'resale'), [products]);
+            const printProducts = useMemo(() => products.filter(p => p.type !== 'resale'), [products]);
+
+            const totalPhysicalUnits = useMemo(() => {
+                return resaleProducts.reduce((acc, p) => acc + (parseInt(p.stock) || 0), 0);
+            }, [resaleProducts]);
+
+            const totalCapitalInvested = useMemo(() => {
+                return resaleProducts.reduce((acc, p) => {
+                    const st = parseInt(p.stock) || 0;
+                    const cost = parseFloat(p.acquisitionCost) || 0;
+                    return acc + (st * cost);
+                }, 0);
+            }, [resaleProducts]);
+
+            const projectedGrossProfit = useMemo(() => {
+                return resaleProducts.reduce((acc, p) => {
+                    const st = parseInt(p.stock) || 0;
+                    const cost = parseFloat(p.acquisitionCost) || 0;
+                    const price = parseFloat(p.price) || 0;
+                    const diff = price - cost;
+                    return acc + (st * (diff > 0 ? diff : 0));
+                }, 0);
+            }, [resaleProducts]);
+
+            const handleSyncBlingCatalog = async () => {
                 try {
-                    const btn = document.getElementById('btn-pull-ml');
-                    if (btn) btn.innerHTML = '⏳ Puxando...';
-                    
-                    const res = await fetch('/api/sync-ml-stock');
+                    setSyncingBling(true);
+                    const res = await fetch('/api/bling/sync-products', { method: 'POST' });
                     const data = await res.json();
-                    
+                    setSyncingBling(false);
                     if (data.success) {
                         alert(data.message);
                         window.location.reload();
                     } else {
-                        alert('Erro ao puxar estoque: ' + data.error);
-                        if (btn) btn.innerHTML = '🔄 Puxar Estoque do ML';
+                        alert('Aviso: ' + (data.error || 'Erro ao sincronizar catálogo do Bling.'));
                     }
                 } catch (e) {
-                    alert('Erro de conexão com o servidor ao sincronizar.');
-                    const btn = document.getElementById('btn-pull-ml');
-                    if (btn) btn.innerHTML = '🔄 Puxar Estoque do ML';
+                    setSyncingBling(false);
+                    alert('Erro de conexão ao sincronizar com o Bling.');
                 }
             };
 
@@ -6322,35 +6342,89 @@
             return (
                 <div className="space-y-6">
                     {/* Cabeçalho */}
-                    <div className="flex justify-between items-center">
+                    <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
                         <div>
-                            
-                                <h2 className="text-2xl font-black text-white">Controle de Estoque & Inventário</h2>
-                                <p className="text-gray-400 text-xs mt-1">Gerencie a entrada, saída, custos e níveis de estoque dos seus produtos de forma simples e direta por unidade.</p>
+                            <h2 className="text-2xl font-black text-white flex items-center gap-3">
+                                <i data-lucide="package" className="w-7 h-7 text-brand-orange"></i>
+                                Controle de Estoque & Capital Investido
+                            </h2>
+                            <p className="text-gray-400 text-xs mt-1">
+                                Monitore com precisão o dinheiro imobilizado em peças/filamentos e separe produtos sob encomenda.
+                            </p>
+                        </div>
+                        <div className="flex flex-wrap gap-3 items-center">
+                            <button 
+                                onClick={handleSyncBlingCatalog}
+                                disabled={syncingBling}
+                                className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-black font-extrabold px-4 py-3 rounded-xl transition-all shadow-lg text-xs tracking-wider flex items-center gap-2 cursor-pointer"
+                            >
+                                <i data-lucide="refresh-cw" className={`w-4 h-4 ${syncingBling ? 'animate-spin' : ''}`}></i>
+                                {syncingBling ? 'Sincronizando Bling...' : '🔄 Sincronizar com Bling'}
+                            </button>
+                            <button 
+                                onClick={() => setIsAdding(!isAdding)}
+                                className="bg-brand-orange hover:bg-brand-orange-dark text-black font-extrabold px-5 py-3 rounded-xl transition-all shadow-lg text-xs uppercase tracking-wider flex items-center gap-2 cursor-pointer"
+                            >
+                                <i data-lucide="plus" className="w-4 h-4"></i>
+                                {isAdding ? 'Fechar Painel' : '+ Novo Item'}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Cards de Inteligência de Estoque & Capital Investido */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="glass-panel p-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/5">
+                            <div className="flex justify-between items-start">
+                                <span className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-400">Capital Investido</span>
+                                <span className="text-xs">💰</span>
                             </div>
-                            <div className="flex gap-4 items-center">
-                                <div className="bg-[#16161A] border border-white/5 px-4 py-2 rounded-xl text-right">
-                                    <span className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest">Total em Estoque</span>
-                                    <span className="text-sm font-black text-white">{totalItems} unidades</span>
-                                </div>
-                                <div className="bg-brand-orange/10 border border-brand-orange/20 px-4 py-2 rounded-xl text-right">
-                                    <span className="block text-[10px] font-bold text-brand-orange uppercase tracking-widest">Valor Investido</span>
-                                    <span className="text-sm font-black text-brand-orange">R$ {totalInvested.toFixed(2)}</span>
-                                </div>
-                                <button 
-                                    id="btn-pull-ml"
-                                    onClick={handlePullStock}
-                                    className="bg-blue-600 hover:bg-blue-500 text-white font-extrabold px-4 py-3 rounded-xl transition-all shadow-lg text-xs tracking-wider flex items-center gap-2"
-                                >
-                                    🔄 Puxar Estoque do ML
-                                </button>
-                                <button 
-                                    onClick={() => setIsAdding(!isAdding)}
-                                    className="bg-brand-orange hover:bg-brand-orange-dark text-black font-extrabold px-6 py-3 rounded-xl transition-all shadow-lg text-xs uppercase tracking-wider"
-                                >
-                                    {isAdding ? 'Fechar Painel' : '+ Cadastrar Novo Item'}
-                                </button>
-                            </div></div>
+                            <div className="text-2xl font-black text-emerald-400 mt-2">
+                                R$ {totalCapitalInvested.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </div>
+                            <span className="text-[10px] text-gray-400 mt-1 block">
+                                Dinheiro imobilizado em prateleira
+                            </span>
+                        </div>
+
+                        <div className="glass-panel p-5 rounded-2xl border border-blue-500/20 bg-blue-500/5">
+                            <div className="flex justify-between items-start">
+                                <span className="text-[10px] font-extrabold uppercase tracking-widest text-blue-400">Estoque Físico Total</span>
+                                <span className="text-xs">📦</span>
+                            </div>
+                            <div className="text-2xl font-black text-white mt-2">
+                                {totalPhysicalUnits} <span className="text-xs font-normal text-gray-400">unidades</span>
+                            </div>
+                            <span className="text-[10px] text-gray-400 mt-1 block">
+                                {resaleProducts.length} itens de revenda/peças
+                            </span>
+                        </div>
+
+                        <div className="glass-panel p-5 rounded-2xl border border-amber-500/20 bg-amber-500/5">
+                            <div className="flex justify-between items-start">
+                                <span className="text-[10px] font-extrabold uppercase tracking-widest text-amber-400">Lucro Bruto Projetado</span>
+                                <span className="text-xs">📈</span>
+                            </div>
+                            <div className="text-2xl font-black text-amber-400 mt-2">
+                                R$ {projectedGrossProfit.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </div>
+                            <span className="text-[10px] text-gray-400 mt-1 block">
+                                Margem ao liquidar o estoque físico
+                            </span>
+                        </div>
+
+                        <div className="glass-panel p-5 rounded-2xl border border-purple-500/20 bg-purple-500/5">
+                            <div className="flex justify-between items-start">
+                                <span className="text-[10px] font-extrabold uppercase tracking-widest text-purple-400">Sob Encomenda (3D)</span>
+                                <span className="text-xs">🖨️</span>
+                            </div>
+                            <div className="text-2xl font-black text-purple-300 mt-2">
+                                {printProducts.length} <span className="text-xs font-normal text-gray-400">modelos</span>
+                            </div>
+                            <span className="text-[10px] text-gray-400 mt-1 block">
+                                Produção sob demanda (sem estoque travado)
+                            </span>
+                        </div>
+                    </div>
 
                     {/* Painel de Cadastro Simplificado */}
                     {isAdding && (
@@ -6512,8 +6586,10 @@
                                         <th className="py-4 px-6">SKU / Código</th>
                                         <th className="py-4 px-6">Produto / Detalhes</th>
                                         <th className="py-4 px-6 text-center">Fornecedor</th>
+                                        <th className="py-4 px-6 text-center">Tipo</th>
                                         <th className="py-4 px-6 text-center">Custo Unitário</th>
                                         <th className="py-4 px-6 text-center">Estoque Físico</th>
+                                        <th className="py-4 px-6 text-center">Capital Investido</th>
                                         <th className="py-4 px-6 text-center">Ajuste Rápido</th>
                                         <th className="py-4 px-6 text-right">Ações de Movimentação</th>
                                     </tr>
@@ -6521,7 +6597,7 @@
                                 <tbody className="divide-y divide-white/5">
                                     {filteredProducts.length === 0 ? (
                                         <tr>
-                                            <td colSpan="7" className="py-12 text-center text-gray-500 font-semibold">
+                                            <td colSpan="8" className="py-12 text-center text-gray-500 font-semibold">
                                                 Nenhum produto encontrado com os filtros ativos.
                                             </td>
                                         </tr>

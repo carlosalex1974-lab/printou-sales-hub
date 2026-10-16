@@ -2649,6 +2649,119 @@ app.post('/api/bling/sync-orders', async (req, res) => {
 });
 
 // Endpoint para consultar status do Bling
+
+// Endpoint para sincronizar Catálogo de Produtos e Custos com o Bling ERP
+app.post('/api/bling/sync-products', async (req, res) => {
+    try {
+        console.log("[BLING SYNC PRODUCTS] Iniciando sincronização de catálogo e custos do Bling...");
+        const accessToken = await getBlingValidAccessToken();
+        const fetch = globalThis.fetch;
+
+        let page = 1;
+        let allBlingProducts = [];
+        let hasMore = true;
+
+        while (hasMore && page <= 5) {
+            const bRes = await fetch(`https://api.bling.com.br/Api/v3/produtos?pagina=${page}&limite=100`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Accept': 'application/json'
+                }
+            });
+
+            if (!bRes.ok) {
+                console.error("[BLING SYNC PRODUCTS] Erro HTTP:", bRes.status);
+                break;
+            }
+
+            const data = await bRes.json();
+            const list = data.data || [];
+            allBlingProducts.push(...list);
+
+            if (list.length < 100) hasMore = false;
+            else page++;
+        }
+
+        console.log(`[BLING SYNC PRODUCTS] ${allBlingProducts.length} produtos obtidos do Bling.`);
+
+        const db = await readDb();
+        db.products = db.products || [];
+        let updatedCount = 0;
+        let newCount = 0;
+
+        for (const bp of allBlingProducts) {
+            const blingSku = String(bp.codigo || '').trim();
+            const blingId = String(bp.id);
+            const blingName = String(bp.nome || '').trim();
+            const cost = parseFloat(bp.precoCusto) || 0;
+            const price = parseFloat(bp.preco) || 0;
+            const stock = parseInt(bp.estoque?.saldoFisicoTotal ?? bp.estoque?.saldoVirtualTotal ?? 0) || 0;
+
+            let existing = db.products.find(p => 
+                (blingSku && p.id === blingSku) ||
+                (blingSku && p.externalIds && p.externalIds.includes(blingSku)) ||
+                (p.id === blingId) ||
+                (p.name && blingName && p.name.toLowerCase() === blingName.toLowerCase())
+            );
+
+            if (existing) {
+                let changed = false;
+                if (cost > 0 && (!existing.acquisitionCost || existing.acquisitionCost === 0)) {
+                    existing.acquisitionCost = cost;
+                    changed = true;
+                }
+                if (stock > 0 && existing.stock !== stock) {
+                    existing.stock = stock;
+                    changed = true;
+                }
+                if (price > 0 && (!existing.price || existing.price === 0)) {
+                    existing.price = price;
+                    changed = true;
+                }
+                if (changed) updatedCount++;
+            } else {
+                const newProd = {
+                    id: blingSku || ('BLING-' + blingId),
+                    name: blingName,
+                    type: 'resale',
+                    stock: stock,
+                    acquisitionCost: cost,
+                    price: price,
+                    alertThreshold: 3,
+                    supplierId: 'Bling ERP',
+                    image: bp.imagemURL || ''
+                };
+                db.products.push(newProd);
+                newCount++;
+            }
+        }
+
+        db.integrationLogs = db.integrationLogs || [];
+        db.integrationLogs.push({
+            id: Date.now().toString(),
+            date: new Date().toISOString(),
+            type: 'info',
+            message: `Sincronização de catálogo com o Bling: ${allBlingProducts.length} produtos analisados, ${updatedCount} atualizados, ${newCount} novos adicionados.`
+        });
+
+        await saveDb(db);
+        console.log(`[BLING SYNC PRODUCTS] Concluído! ${updatedCount} atualizados, ${newCount} adicionados.`);
+
+        res.json({
+            success: true,
+            totalFound: allBlingProducts.length,
+            updatedCount,
+            newCount,
+            message: `Catálogo sincronizado com o Bling com sucesso: ${updatedCount} itens atualizados e ${newCount} novos!`
+        });
+
+    } catch (err) {
+        console.error("[BLING SYNC PRODUCTS ERROR]:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.get('/api/bling/status', async (req, res) => {
     try {
         const db = await readDb();
