@@ -63,6 +63,7 @@ const DEFAULT_DB = {
         { id: 'ml1', name: 'printoustudio3d (Clássico)', commission: 12.0, fixedFee: 6.0, color: '#7C3AED', hasFreeShippingThreshold: true, freeShippingThreshold: 79.0, defaultSellerShippingCost: 19.90, defaultBelowThresholdShippingCost: 0.0 },
         { id: 'ml2', name: 'AlucarPrintoustudio3d (Premium)', commission: 19.5, fixedFee: 6.0, color: '#14B8A6', hasFreeShippingThreshold: true, freeShippingThreshold: 79.0, defaultSellerShippingCost: 19.90, defaultBelowThresholdShippingCost: 0.0 },
         { id: 'shopee', name: 'Shopee', commission: 14.0, fixedFee: 3.0, color: '#EE4D2D', hasFreeShippingThreshold: false, freeShippingThreshold: 0, defaultSellerShippingCost: 0.0, defaultBelowThresholdShippingCost: 0.0 },
+        { id: 'tiktok', name: 'TikTok Shop', commission: 5.0, fixedFee: 0.0, color: '#fe0979', hasFreeShippingThreshold: false, freeShippingThreshold: 0, defaultSellerShippingCost: 0.0, defaultBelowThresholdShippingCost: 0.0 },
         { id: 'site', name: 'Site Próprio', commission: 3.99, fixedFee: 0.5, color: '#0088FF', hasFreeShippingThreshold: false, freeShippingThreshold: 0, defaultSellerShippingCost: 0.0, defaultBelowThresholdShippingCost: 0.0 },
         { id: 'direta', name: 'Venda Direta / Pix', commission: 0.0, fixedFee: 0.0, color: '#30D158', hasFreeShippingThreshold: false, freeShippingThreshold: 0, defaultSellerShippingCost: 0.0, defaultBelowThresholdShippingCost: 0.0 }
     ],
@@ -145,6 +146,21 @@ async function readDb() {
     if (db.credentials.facebook.accessToken) db.credentials.facebook.status = 'Sincronizado';
     else db.credentials.facebook.status = 'Nao Sincronizado';
 
+    db.channels = db.channels || [];
+    if (!db.channels.find(c => c.id === 'tiktok')) {
+        db.channels.push({
+            id: 'tiktok',
+            name: 'TikTok Shop',
+            commission: 5.0,
+            fixedFee: 0.0,
+            color: '#fe0979',
+            hasFreeShippingThreshold: false,
+            freeShippingThreshold: 0,
+            defaultSellerShippingCost: 0.0,
+            defaultBelowThresholdShippingCost: 0.0
+        });
+    }
+    
     db.monthlyClosings = db.monthlyClosings || [];
     
     // Assegurar arrays do módulo de Caixa
@@ -2561,9 +2577,9 @@ app.post('/api/bling/sync-orders', async (req, res) => {
             const rawObs = String(order.observacoes || '').toLowerCase();
             const rawNum = String(order.numeroLoja || '');
 
-            if (rawObs.includes('tiktok') || rawNum.startsWith('57') || rawLoja.includes('tiktok')) {
+            if (rawObs.includes('tiktok') || rawNum.startsWith('57') || rawNum.startsWith('58') || /^5\d{15,}/.test(rawNum) || rawLoja.includes('tiktok')) {
                 channelId = 'tiktok';
-            } else if (rawObs.includes('mercado') || rawObs.includes('meli') || rawNum.length >= 16 || rawLoja.includes('ml')) {
+            } else if (rawObs.includes('mercado') || rawObs.includes('meli') || rawNum.startsWith('2000') || rawNum.startsWith('MLB') || rawLoja.includes('ml')) {
                 channelId = 'ml1';
             } else if (rawObs.includes('shopee') || rawLoja.includes('shopee')) {
                 channelId = 'shopee';
@@ -2598,6 +2614,10 @@ app.post('/api/bling/sync-orders', async (req, res) => {
                 // Atualiza status se mudou
                 if (existingSale.status !== saleStatus) {
                     existingSale.status = saleStatus;
+                    updatedCount++;
+                }
+                if (existingSale.channelId !== channelId) {
+                    existingSale.channelId = channelId;
                     updatedCount++;
                 }
             }
