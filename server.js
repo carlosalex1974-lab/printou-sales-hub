@@ -2390,7 +2390,7 @@ async function getBlingValidAccessToken() {
         // Fetch nativo global do Node 24
         const fetch = globalThis.fetch;
 
-        const res = await fetch('https://www.bling.com.br/Api/v3/oauth/token', {
+        const res = await fetch('https://api.bling.com.br/Api/v3/oauth/token', {
             method: 'POST',
             headers: {
                 'Authorization': `Basic ${basicAuth}`,
@@ -2463,7 +2463,7 @@ app.get('/api/auth/bling/callback', async (req, res) => {
         // Fetch nativo global do Node 24
         const fetch = globalThis.fetch;
 
-        const tokenRes = await fetch('https://www.bling.com.br/Api/v3/oauth/token', {
+        const tokenRes = await fetch('https://api.bling.com.br/Api/v3/oauth/token', {
             method: 'POST',
             headers: {
                 'Authorization': `Basic ${basicAuth}`,
@@ -2530,7 +2530,7 @@ app.post('/api/bling/sync-orders', async (req, res) => {
         const fetch = globalThis.fetch;
 
         // Busca os últimos 100 pedidos no Bling (ordenados pelos mais recentes)
-        const blingRes = await fetch('https://www.bling.com.br/Api/v3/pedidos/vendas?limite=100', {
+        const blingRes = await fetch('https://api.bling.com.br/Api/v3/pedidos/vendas?limite=100', {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${accessToken}`,
@@ -2584,7 +2584,7 @@ app.post('/api/bling/sync-orders', async (req, res) => {
                     externalId: externalId,
                     date: order.data ? new Date(order.data).toISOString() : new Date().toISOString(),
                     channelId: channelId,
-                    productId: 'bling_item',
+                    productId: (db.products && db.products.length > 0) ? db.products[0].id : 'bling_item',
                     quantity: 1,
                     grossValue: parseFloat(order.total) || 0,
                     discount: parseFloat(order.desconto?.valor) || 0,
