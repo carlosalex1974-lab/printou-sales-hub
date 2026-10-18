@@ -287,13 +287,14 @@
 
         const INITIAL_EXPENSES = [];
 
-        // Utilitário para mutação atômica
+        // Utilitário para mutação atômica com suporte a id direto ou payload.id
         const mutateServer = async (collection, action, payload, id) => {
             try {
+                const targetId = id || (payload && payload.id);
                 await fetch('/api/mutate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ collection, action, payload, id })
+                    body: JSON.stringify({ collection, action, payload, id: targetId })
                 });
             } catch (e) {
                 console.error("Erro na mutação:", e);
@@ -774,21 +775,39 @@
                 }
             }, [activeTab, isSaleModalOpen, sales, products, expenses, theme]);
 
-            // --- CÁLCULO DE CUSTO DO PRODUTO (Com Taxa de Perda/Falha ou Custo de Revenda) ---
+            // --- CÁLCULO DE CUSTO DO PRODUTO (Manual ou com Taxa de Perda/Falha) ---
             const calculateProductCost = (prod) => {
-                if (prod.type === 'resale') {
-                    return parseFloat((prod.acquisitionCost || 0).toFixed(2));
+                if (!prod) return 0;
+                // Se acquisitionCost for informado manualmente (> 0), usa diretamente!
+                const manualCost = parseFloat(prod.acquisitionCost);
+                if (!isNaN(manualCost) && manualCost > 0) {
+                    return parseFloat(manualCost.toFixed(2));
                 }
-                const filCost = (prod.weight * prod.filamentCost) / 1000;
-                const machCost = prod.printTime * prod.machineHourCost;
-                const rateFactor = 1 + ((prod.failRate || 0) / 100);
+                if (prod.type === 'resale') {
+                    return parseFloat((parseFloat(prod.acquisitionCost) || 0).toFixed(2));
+                }
+                // Peças impressas 3D calculadas por peso/tempo
+                const weight = parseFloat(prod.weight) || 0;
+                const filamentCost = parseFloat(prod.filamentCost) || 0;
+                const filCost = (weight * filamentCost) / 1000;
+                const printTime = parseFloat(prod.printTime) || 0;
+                const machineHourCost = parseFloat(prod.machineHourCost) || 0;
+                const machCost = printTime * machineHourCost;
+                const failRate = parseFloat(prod.failRate) || 0;
+                const rateFactor = 1 + (failRate / 100);
                 const rawCost = (filCost + machCost) * rateFactor;
-                return parseFloat((rawCost + prod.finishingCost + prod.packagingCost).toFixed(2));
+                const finishingCost = parseFloat(prod.finishingCost) || 0;
+                const packagingCost = parseFloat(prod.packagingCost) || 0;
+                const total = rawCost + finishingCost + packagingCost;
+                if (isNaN(total) || total === 0) {
+                    return parseFloat((parseFloat(prod.acquisitionCost) || 0).toFixed(2));
+                }
+                return parseFloat(total.toFixed(2));
             };
 
-                                                // --- LÓGICA DE CÁLCULO FINANCEIRO POR VENDA ---
+            // --- LÓGICA DE CÁLCULO FINANCEIRO POR VENDA ---
             const computeSaleFinancials = (sale) => {
-                const prod = typeof findProduct === 'function' ? findProduct(sale.productId) : products.find(p => p.id === sale.productId);
+                const prod = typeof findProduct === 'function' ? findProduct(sale.productId) : products.find(p => p.id === sale.productId || (p.externalIds && p.externalIds.includes(sale.productId)));
                 const chan = channels.find(c => c.id === sale.channelId);
                 const qty = sale.quantity || 1;
                 
@@ -804,17 +823,23 @@
                 }
                 
                 let shipping = 0;
-                if (sale.channelId === 'direta') {
-                    // Venda Direta / Pix: Usa estritamente o valor informado na venda (padrão R$ 0,00)
+                const isTiktok = sale.channelId === 'tiktok' || (chan && chan.name && chan.name.toLowerCase().includes('tiktok'));
+                if (sale.channelId === 'direta' || isTiktok) {
+                    // Venda Direta / Pix / TikTok Shop: Usa estritamente o frete informado na venda (padrão R$ 0,00)
                     shipping = (sale.shipping !== undefined && sale.shipping !== null && sale.shipping !== '' && !isNaN(parseFloat(sale.shipping)))
                         ? parseFloat(sale.shipping)
                         : 0;
                 } else {
                     // Canais Online (Mercado Livre, Shopee, Site):
-                    // Determina o custo de frete do vendedor (tabela subsidiada do produto ou do canal)
-                    let sellerShippingUnit = (prod && prod.customShippingCost !== undefined && prod.customShippingCost !== null && parseFloat(prod.customShippingCost) > 0)
-                        ? parseFloat(prod.customShippingCost)
-                        : (chan ? (chan.defaultSellerShippingCost || 20.75) : 20.75);
+                    // Determina o custo de frete do vendedor (se o produto tiver frete personalizado configurado, inclusive 0)
+                    let sellerShippingUnit;
+                    if (prod && prod.customShippingCost !== undefined && prod.customShippingCost !== null && !isNaN(parseFloat(prod.customShippingCost))) {
+                        sellerShippingUnit = parseFloat(prod.customShippingCost);
+                    } else if (chan && chan.defaultSellerShippingCost !== undefined && chan.defaultSellerShippingCost !== null && !isNaN(parseFloat(chan.defaultSellerShippingCost))) {
+                        sellerShippingUnit = parseFloat(chan.defaultSellerShippingCost);
+                    } else {
+                        sellerShippingUnit = (chan && (chan.id.startsWith('ml') || chan.name?.toLowerCase().includes('mercado'))) ? 20.75 : 0;
+                    }
 
                     let expectedSellerShipping = sellerShippingUnit * qty;
 
@@ -822,8 +847,8 @@
                         ? parseFloat(sale.shipping)
                         : 0;
 
-                    // Se o valor gravado na venda for desproporcionalmente alto (frete bruto de transportadora R$ 43,50 / R$ 87,00) ou 0, usa o frete real do vendedor
-                    if (rawShip > expectedSellerShipping + 0.05 || rawShip === 0) {
+                    // Se o valor gravado na venda for desproporcionalmente alto (frete bruto de transportadora R$ 43,50 / R$ 87,00) ou 0 e o canal cobrar frete do vendedor
+                    if (rawShip > expectedSellerShipping + 0.05 || (rawShip === 0 && expectedSellerShipping > 0)) {
                         shipping = expectedSellerShipping;
                     } else {
                         shipping = rawShip;
@@ -831,13 +856,16 @@
                 }
 
                 const discount = parseFloat(sale.discount) || 0;
-                const netProfit = sale.status === 'Cancelado' ? 0 : parseFloat((sale.grossValue - fee - productCostTotal - shipping - discount).toFixed(2));
+                const safeCost = isNaN(productCostTotal) ? 0 : productCostTotal;
+                const safeFee = isNaN(fee) ? 0 : fee;
+                const safeShipping = isNaN(shipping) ? 0 : shipping;
+                const netProfit = sale.status === 'Cancelado' ? 0 : parseFloat((sale.grossValue - safeFee - safeCost - safeShipping - discount).toFixed(2));
                 
                 return {
-                    productCost: productCostTotal,
-                    fees: fee,
-                    netProfit: netProfit,
-                    shippingApplied: shipping
+                    productCost: safeCost,
+                    fees: safeFee,
+                    netProfit: isNaN(netProfit) ? 0 : netProfit,
+                    shippingApplied: safeShipping
                 };
             };
 
@@ -2117,7 +2145,7 @@
 
         // --- ABA 1: DASHBOARD VIEW ---
         function DashboardView({ stats, sales, channels, products, compute, filaments = [], selectedMonth, monthlyClosings = [] }) {
-            const findProduct = (id) => products.find(p => p.id === id || (p.externalIds && p.externalIds.includes(id)));
+            const findProduct = (id) => products.find(p => p.id === id || (p.externalIds && p.externalIds.includes(id)) || p.name === id || (p.sku && p.sku === id));
 
             // 5 Produtos mais vendidos no mês selecionado
             const topProducts = useMemo(() => {
@@ -2468,18 +2496,22 @@
                     return;
                 }
                 
+                const updatedSale = {
+                    ...editingSale,
+                    date: editingSale.date,
+                    channelId: editingSale.channelId,
+                    productId: editingSale.productId,
+                    quantity: parseInt(editingSale.quantity) || 1,
+                    grossValue: parseFloat(editingSale.grossValue) || 0,
+                    shipping: parseFloat(editingSale.shipping) || 0,
+                    status: editingSale.status
+                };
+
+                mutateServer('sales', 'update', updatedSale, updatedSale.id);
+
                 setSales(sales.map(s => {
                     if (s.id === editingSale.id) {
-                        return {
-                            ...s,
-                            date: editingSale.date,
-                            channelId: editingSale.channelId,
-                            productId: editingSale.productId,
-                            quantity: parseInt(editingSale.quantity) || 1,
-                            grossValue: parseFloat(editingSale.grossValue) || 0,
-                            shipping: parseFloat(editingSale.shipping) || 0,
-                            status: editingSale.status
-                        };
+                        return updatedSale;
                     }
                     return s;
                 }));
@@ -2534,13 +2566,15 @@
             return (
                 <div className="glass-panel rounded-2xl p-6 overflow-hidden">
                     {editingSale && (
-                <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-start justify-center p-4 pt-10 md:pt-14 z-[9999] overflow-y-auto animate-fade-in" style={{ top: 0, left: 0, right: 0, bottom: 0 }}>
+                <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-start justify-center p-4 pt-10 md:pt-14 z-[9999] overflow-y-auto animate-fade-in">
+                    <div className="bg-[#121215] border border-white/10 rounded-2xl w-full max-w-4xl p-6 relative shadow-2xl animate-scale-up my-auto">
                             <div className="flex justify-between items-center mb-4">
                                 <h4 className="font-extrabold text-white text-md flex items-center gap-2">
                                     <i data-lucide="edit-3" className="text-brand-orange w-5 h-5"></i>
                                     Editar Registro de Venda (#{editingSale.id})
                                 </h4>
                                 <button 
+                                    type="button"
                                     onClick={() => setEditingSale(null)}
                                     className="p-1 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white"
                                 >
@@ -2601,7 +2635,7 @@
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Frete Cobrado (R$)</label>
+                                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Frete Cobrado Nesta Venda (R$)</label>
                                     <input 
                                         type="number" step="0.01" required
                                         value={editingSale.shipping}
@@ -2626,7 +2660,7 @@
                                         type="submit"
                                         className="flex-1 bg-brand-orange hover:bg-brand-orange/80 text-white font-bold py-3 rounded-xl text-xs uppercase tracking-wider transition-all"
                                     >
-                                        Salvar
+                                        Salvar Venda
                                     </button>
                                     <button 
                                         type="button"
@@ -2637,8 +2671,9 @@
                                     </button>
                                 </div>
                             </form>
-                        </div>
-                    )}
+                    </div>
+                </div>
+            )}
 
                     <div className="flex justify-between items-center mb-6">
                         <h3 className="font-black text-xl text-gradient">Registro Geral de Vendas</h3>
@@ -2725,21 +2760,25 @@
                                             </td>
                                             <td className="py-4 font-bold text-white">
                                                 <div className="flex items-center gap-2 group/prod">
-                                                    <span>{prod?.name || 'Excluído'}</span>
+                                                    <span className="truncate max-w-[220px]" title={prod?.name || 'Excluído'}>{prod?.name || 'Excluído'}</span>
                                                     {prod && (
                                                         <button 
+                                                            type="button"
                                                             onClick={() => {
-                                                            try { const mainEl = document.querySelector('main') || document.querySelector('.overflow-y-auto') || document.documentElement; if (mainEl) { mainEl.scrollTop = 0; mainEl.scrollTo({ top: 0, behavior: 'smooth' }); } window.scrollTo({ top: 0, behavior: 'smooth' }); } catch(e){}
-                                                            const fallbackPrice = (compute(sale).productCost * (prod.type === 'resale' ? 1.8 : 3)).toFixed(2);
+                                                                try { const mainEl = document.querySelector('main') || document.querySelector('.overflow-y-auto') || document.documentElement; if (mainEl) { mainEl.scrollTop = 0; mainEl.scrollTo({ top: 0, behavior: 'smooth' }); } window.scrollTo({ top: 0, behavior: 'smooth' }); } catch(e){}
+                                                                const fallbackPrice = (fin.productCost * (prod.type === 'resale' ? 1.8 : 3)).toFixed(2);
                                                                 setEditingProductFromSales({ 
                                                                     ...prod, 
+                                                                    name: prod.name || '',
+                                                                    type: prod.type || '3d',
+                                                                    acquisitionCost: prod.acquisitionCost !== undefined && prod.acquisitionCost !== null ? String(prod.acquisitionCost) : (calculateProductCost(prod) ? String(calculateProductCost(prod)) : '0.00'),
+                                                                    customShippingCost: prod.customShippingCost !== undefined && prod.customShippingCost !== null ? String(prod.customShippingCost) : '0.00',
                                                                     price: prod.price !== undefined && prod.price > 0 ? String(prod.price) : fallbackPrice,
-                                                                    stock: prod.stock !== undefined ? String(prod.stock) : '0',
-                                                                    customShippingCost: prod.customShippingCost !== undefined ? String(prod.customShippingCost) : '0.00' 
+                                                                    stock: prod.stock !== undefined ? String(prod.stock) : '0'
                                                                 });
                                                             }}
-                                                            className="p-1 hover:bg-brand-orange/20 text-gray-500 hover:text-brand-orange rounded transition-all opacity-0 group-hover/prod:opacity-100 focus:opacity-100"
-                                                            title="Editar dados deste produto (Preço, Frete, etc.)"
+                                                            className="p-1.5 bg-brand-orange/10 hover:bg-brand-orange text-brand-orange hover:text-black rounded-lg transition-all"
+                                                            title="Editar Custo, Frete e Preço deste produto"
                                                         >
                                                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
                                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -2751,8 +2790,48 @@
                                             <td className="py-4 text-center font-bold">{sale.quantity}</td>
                                             <td className="py-4 text-right font-bold text-white">R$ {sale.grossValue.toFixed(2)}</td>
                                             <td className="py-4 text-right text-rose-400">R$ {fin.fees.toFixed(2)}</td>
-                                            <td className="py-4 text-right text-amber-400 font-semibold">R$ {(fin.shippingApplied || 0).toFixed(2)}</td>
-                                            <td className="py-4 text-right text-gray-400">R$ {fin.productCost.toFixed(2)}</td>
+                                            <td className="py-4 text-right text-amber-400 font-semibold">
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setEditingSale({
+                                                            ...sale,
+                                                            date: formatForInput(sale.date)
+                                                        });
+                                                    }}
+                                                    className="hover:text-white hover:underline inline-flex items-center gap-1 justify-end font-semibold text-amber-400"
+                                                    title="Clique para alterar o frete ou dados desta venda"
+                                                >
+                                                    <span>R$ {(fin.shippingApplied || 0).toFixed(2)}</span>
+                                                    <svg className="w-3 h-3 opacity-60 hover:opacity-100" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                                </button>
+                                            </td>
+                                            <td className="py-4 text-right text-gray-400">
+                                                {prod ? (
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const fallbackPrice = (fin.productCost * (prod.type === 'resale' ? 1.8 : 3)).toFixed(2);
+                                                            setEditingProductFromSales({ 
+                                                                ...prod, 
+                                                                name: prod.name || '',
+                                                                type: prod.type || '3d',
+                                                                acquisitionCost: prod.acquisitionCost !== undefined && prod.acquisitionCost !== null ? String(prod.acquisitionCost) : (calculateProductCost(prod) ? String(calculateProductCost(prod)) : '0.00'),
+                                                                customShippingCost: prod.customShippingCost !== undefined && prod.customShippingCost !== null ? String(prod.customShippingCost) : '0.00',
+                                                                price: prod.price !== undefined && prod.price > 0 ? String(prod.price) : fallbackPrice,
+                                                                stock: prod.stock !== undefined ? String(prod.stock) : '0'
+                                                            });
+                                                        }}
+                                                        className="hover:text-brand-orange hover:underline inline-flex items-center gap-1 justify-end font-semibold text-gray-300"
+                                                        title="Clique para editar o Custo Unitário deste produto impresso / revenda"
+                                                    >
+                                                        <span>R$ {fin.productCost.toFixed(2)}</span>
+                                                        <svg className="w-3 h-3 text-brand-orange opacity-70 hover:opacity-100" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                                    </button>
+                                                ) : (
+                                                    <span>R$ {fin.productCost.toFixed(2)}</span>
+                                                )}
+                                            </td>
                                             <td className={`py-4 text-right font-black ${sale.status === 'Cancelado' ? 'text-gray-500 line-through' : 'text-emerald-400'}`}>
                                                 R$ {fin.netProfit.toFixed(2)}
                                             </td>
@@ -2815,7 +2894,7 @@
                     {/* Modal de Edição Rápida de Produto na Aba de Vendas */}
                     {editingProductFromSales && (
                         <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-start justify-center p-4 pt-10 md:pt-14 z-[9999] overflow-y-auto animate-fade-in">
-                            <div className="bg-[#121215] border border-white/10 rounded-2xl w-full max-w-md p-6 relative shadow-2xl animate-scale-up my-2 mt-2">
+                            <div className="bg-[#121215] border border-white/10 rounded-2xl w-full max-w-md p-6 relative shadow-2xl animate-scale-up my-auto">
                                 <button 
                                     type="button"
                                     onClick={() => setEditingProductFromSales(null)}
@@ -2826,20 +2905,23 @@
                                     </svg>
                                 </button>
                                 
-                                <span className="text-xs font-bold tracking-widest text-brand-orange uppercase">Ajuste Rápido de Produto</span>
+                                <span className="text-xs font-bold tracking-widest text-brand-orange uppercase">Ajuste Rápido de Custo e Frete</span>
                                 <h4 className="font-extrabold text-white text-lg mt-1 mb-5">
-                                    Editar Produto
+                                    Editar Produto ({editingProductFromSales.type === '3d' || editingProductFromSales.type === 'print' ? 'Peça Impressa 3D' : 'Revenda'})
                                 </h4>
                                 
                                 <form onSubmit={(e) => {
                                     e.preventDefault();
-                                    setProducts(products.map(p => p.id === editingProductFromSales.id ? {
-                                        ...p,
+                                    const updatedProd = {
+                                        ...editingProductFromSales,
                                         name: editingProductFromSales.name,
+                                        acquisitionCost: parseFloat(editingProductFromSales.acquisitionCost) || 0,
+                                        customShippingCost: parseFloat(editingProductFromSales.customShippingCost) || 0,
                                         price: parseFloat(editingProductFromSales.price) || 0,
-                                        stock: parseInt(editingProductFromSales.stock) || 0,
-                                        customShippingCost: parseFloat(editingProductFromSales.customShippingCost) || 0
-                                    } : p));
+                                        stock: parseInt(editingProductFromSales.stock) || 0
+                                    };
+                                    mutateServer('products', 'update', updatedProd, updatedProd.id);
+                                    setProducts(products.map(p => p.id === updatedProd.id ? updatedProd : p));
                                     setEditingProductFromSales(null);
                                 }} className="space-y-4">
                                     <div>
@@ -2853,40 +2935,70 @@
                                     </div>
                                     
                                     <div>
-                                        <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1.5">Preço de Venda Real (R$)</label>
+                                        <div className="flex justify-between items-center mb-1.5">
+                                            <label className="block text-[10px] font-extrabold text-brand-orange uppercase tracking-widest">
+                                                Custo Unitário de Fabricação / Aquisição (R$)
+                                            </label>
+                                            <span className="text-[10px] text-gray-400 font-normal">Por unidade</span>
+                                        </div>
                                         <input 
                                             type="number" step="0.01" required
-                                            value={editingProductFromSales.price}
-                                            onChange={e => setEditingProductFromSales({ ...editingProductFromSales, price: e.target.value })}
-                                            className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange font-bold text-sm"
+                                            value={editingProductFromSales.acquisitionCost}
+                                            onChange={e => setEditingProductFromSales({ ...editingProductFromSales, acquisitionCost: e.target.value })}
+                                            className="w-full bg-[#16161A] border border-brand-orange/50 text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange font-bold text-sm"
+                                            placeholder="0.00"
                                         />
+                                        <p className="text-[11px] text-gray-400 mt-1">
+                                            💡 Valor de custo unitário usado para deduzir e somar o lucro líquido correto em todas as vendas deste produto.
+                                        </p>
                                     </div>
 
                                     <div>
-                                        <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1.5">Estoque Físico Atual (un)</label>
-                                        <input 
-                                            type="number" required
-                                            value={editingProductFromSales.stock}
-                                            onChange={e => setEditingProductFromSales({ ...editingProductFromSales, stock: e.target.value })}
-                                            className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange font-bold text-sm"
-                                        />
-                                    </div>
-                                    
-                                    <div>
-                                        <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1.5">Frete Pago no Canal / ML (R$)</label>
+                                        <div className="flex justify-between items-center mb-1.5">
+                                            <label className="block text-[10px] font-extrabold text-amber-400 uppercase tracking-widest">
+                                                Frete Subsidiado pelo Vendedor no Canal (R$)
+                                            </label>
+                                            <span className="text-[10px] text-gray-400 font-normal">Padrão</span>
+                                        </div>
                                         <input 
                                             type="number" step="0.01" required
                                             value={editingProductFromSales.customShippingCost}
                                             onChange={e => setEditingProductFromSales({ ...editingProductFromSales, customShippingCost: e.target.value })}
                                             className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange font-bold text-sm"
+                                            placeholder="0.00"
                                         />
+                                        <p className="text-[11px] text-gray-400 mt-1">
+                                            💡 Frete subsidiado pago por você (ex: R$ 0,00 para TikTok Shop e Venda Direta; R$ 20,75 para Mercado Livre acima de R$ 79).
+                                        </p>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1.5">Preço de Venda (R$)</label>
+                                            <input 
+                                                type="number" step="0.01" required
+                                                value={editingProductFromSales.price}
+                                                onChange={e => setEditingProductFromSales({ ...editingProductFromSales, price: e.target.value })}
+                                                className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange font-bold text-sm"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1.5">Estoque Físico (un)</label>
+                                            <input 
+                                                type="number" required
+                                                value={editingProductFromSales.stock}
+                                                onChange={e => setEditingProductFromSales({ ...editingProductFromSales, stock: e.target.value })}
+                                                className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange font-bold text-sm"
+                                            />
+                                        </div>
                                     </div>
                                     
                                     <button 
                                         type="submit"
                                         className="w-full btn-gradient py-3.5 rounded-xl font-extrabold text-black uppercase tracking-widest text-xs mt-2"
                                     >
-                                        Salvar e Corrigir Vendas
+                                        Salvar e Atualizar Lucros
                                     </button>
                                 </form>
                             </div>
@@ -2999,7 +3111,7 @@
                     finishingCost: newProduct.type === '3d' ? parseFloat(newProduct.finishingCost) : 0,
                     packagingCost: newProduct.type === '3d' ? parseFloat(newProduct.packagingCost) : 0,
                     failRate: newProduct.type === '3d' ? parseFloat(newProduct.failRate) || 0 : 0,
-                    acquisitionCost: newProduct.type === 'resale' ? parseFloat(newProduct.acquisitionCost) : 0,
+                    acquisitionCost: parseFloat(newProduct.acquisitionCost) || 0,
                     customShippingCost: parseFloat(newProduct.customShippingCost) || 0,
                     price: parseFloat(newProduct.price) || 0,
                     stock: parseInt(newProduct.stock) || 0,
@@ -3042,7 +3154,7 @@
                     finishingCost: editingProduct.type === '3d' ? parseFloat(editingProduct.finishingCost) : 0,
                     packagingCost: editingProduct.type === '3d' ? parseFloat(editingProduct.packagingCost) : 0,
                     failRate: editingProduct.type === '3d' ? parseFloat(editingProduct.failRate) || 0 : 0,
-                    acquisitionCost: editingProduct.type === 'resale' ? parseFloat(editingProduct.acquisitionCost) : 0,
+                    acquisitionCost: parseFloat(editingProduct.acquisitionCost) || 0,
                     customShippingCost: parseFloat(editingProduct.customShippingCost) || 0,
                     price: parseFloat(editingProduct.price) || 0,
                     stock: parseInt(editingProduct.stock) || 0,
@@ -3421,6 +3533,18 @@
                                                 else setNewProduct({ ...newProduct, failRate: e.target.value });
                                             }}
                                             className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-extrabold text-brand-orange uppercase tracking-widest mb-2">Custo Unitário Direto (R$ - Opcional)</label>
+                                        <input 
+                                            type="number" step="0.01" placeholder="Ex: 12.00 (Fixo)"
+                                            value={activeForm.acquisitionCost || ''}
+                                            onChange={e => {
+                                                if (isEditing) setEditingProduct({ ...editingProduct, acquisitionCost: e.target.value });
+                                                else setNewProduct({ ...newProduct, acquisitionCost: e.target.value });
+                                            }}
+                                            className="w-full bg-[#16161A] border border-brand-orange/40 text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange"
                                         />
                                     </div>
                                 </>

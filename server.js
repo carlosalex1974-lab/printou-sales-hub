@@ -325,7 +325,8 @@ app.post('/api/mutate', async (req, res) => {
                     }
                 }
             } else if (action === 'update') {
-                db[collection] = db[collection].map(item => item.id === id ? { ...item, ...payload } : item);
+                const targetId = id || (payload && payload.id);
+                db[collection] = db[collection].map(item => item.id === targetId ? { ...item, ...payload } : item);
             } else if (action === 'delete') {
                 db[collection] = db[collection].filter(item => item.id !== id);
             }
