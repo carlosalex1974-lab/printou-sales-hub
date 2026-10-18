@@ -2432,10 +2432,29 @@
 
         // --- ABA 2: LISTA DE VENDAS E CONTROLE ---
         function SalesListView({ sales, products, channels, setSales, setProducts, compute, monthlyClosings = [] }) {
-            const findProduct = (id) => products.find(p => p.id === id || (p.externalIds && p.externalIds.includes(id)));
+            const findProduct = (id) => products.find(p => p.id === id || (p.externalIds && p.externalIds.includes(id)) || p.name === id || (p.sku && p.sku === id));
             const [selectedStatusFilter, setSelectedStatusFilter] = useState('Todos');
             const [editingProductFromSales, setEditingProductFromSales] = useState(null);
             const [editingSale, setEditingSale] = useState(null);
+            const [isSyncingBling, setIsSyncingBling] = useState(false);
+
+            const handleSyncBlingFromSales = async () => {
+                setIsSyncingBling(true);
+                try {
+                    const res = await fetch('/api/bling/sync-orders', { method: 'POST' });
+                    const data = await res.json();
+                    if (data.success) {
+                        alert(data.message || 'Pedidos sincronizados com sucesso!');
+                        window.location.reload();
+                    } else {
+                        alert('Aviso: ' + (data.error || 'Erro ao sincronizar pedidos do Bling.'));
+                    }
+                } catch(e) {
+                    alert('Erro de comunicação ao sincronizar pedidos do Bling.');
+                } finally {
+                    setIsSyncingBling(false);
+                }
+            };
 
             const handleEmitirNfeTiny = async (sale) => {
                 try {
@@ -2565,125 +2584,161 @@
 
             return (
                 <div className="glass-panel rounded-2xl p-6 overflow-hidden">
-                    {editingSale && (
-                <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-start justify-center p-4 pt-10 md:pt-14 z-[9999] overflow-y-auto animate-fade-in">
-                    <div className="bg-[#121215] border border-white/10 rounded-2xl w-full max-w-4xl p-6 relative shadow-2xl animate-scale-up my-auto">
-                            <div className="flex justify-between items-center mb-4">
-                                <h4 className="font-extrabold text-white text-md flex items-center gap-2">
-                                    <i data-lucide="edit-3" className="text-brand-orange w-5 h-5"></i>
-                                    Editar Registro de Venda (#{editingSale.id})
-                                </h4>
-                                <button 
-                                    type="button"
-                                    onClick={() => setEditingSale(null)}
-                                    className="p-1 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white"
-                                >
-                                    <i data-lucide="x" className="w-5 h-5"></i>
-                                </button>
-                            </div>
-                            
-                            <form onSubmit={handleUpdateSale} className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    {editingSale && ReactDOM.createPortal(
+                <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-[999999] overflow-y-auto animate-fade-in" style={{ margin: 0, top: 0, left: 0, right: 0, bottom: 0 }}>
+                    <div className="bg-[#121215] border border-white/15 rounded-2xl w-full max-w-2xl p-6 relative shadow-2xl animate-scale-up max-h-[92vh] overflow-y-auto my-auto">
+                        <div className="flex justify-between items-center mb-5 pb-3 border-b border-white/10">
+                            <h4 className="font-extrabold text-white text-base flex items-center gap-2">
+                                <span className="w-2.5 h-2.5 rounded-full bg-brand-orange"></span>
+                                Editar Registro de Venda (#{editingSale.id})
+                            </h4>
+                            <button 
+                                type="button"
+                                onClick={() => setEditingSale(null)}
+                                className="p-1 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-colors"
+                            >
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            </button>
+                        </div>
+                        
+                        <form onSubmit={handleUpdateSale} className="space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Data / Hora</label>
+                                    <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1.5">Data / Hora</label>
                                     <input 
                                         type="datetime-local" required
                                         value={editingSale.date}
                                         onChange={e => setEditingSale(prev => ({ ...prev, date: e.target.value }))}
-                                        className="w-full bg-brand-darkBg border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange"
+                                        className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange font-bold text-sm"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Canal de Venda</label>
+                                    <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1.5">Canal de Venda</label>
                                     <select
                                         value={editingSale.channelId}
                                         onChange={e => setEditingSale(prev => ({ ...prev, channelId: e.target.value }))}
-                                        className="w-full bg-brand-darkBg border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange"
+                                        className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange font-bold text-sm"
                                     >
                                         {channels.map(c => (
                                             <option key={c.id} value={c.id}>{c.name}</option>
                                         ))}
                                     </select>
                                 </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1.5">Produto Vendido</label>
+                                <select
+                                    value={editingSale.productId}
+                                    onChange={e => setEditingSale(prev => ({ ...prev, productId: e.target.value }))}
+                                    className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange font-bold text-sm"
+                                >
+                                    {!products.some(p => p.id === editingSale.productId) && (
+                                        <option value={editingSale.productId}>
+                                            {findProduct(editingSale.productId)?.name || editingSale.productId}
+                                        </option>
+                                    )}
+                                    {products.map(p => (
+                                        <option key={p.id} value={p.id}>{p.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Produto</label>
-                                    <select
-                                        value={editingSale.productId}
-                                        onChange={e => setEditingSale(prev => ({ ...prev, productId: e.target.value }))}
-                                        className="w-full bg-brand-darkBg border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange"
-                                    >
-                                        {products.map(p => (
-                                            <option key={p.id} value={p.id}>{p.name}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Quantidade</label>
+                                    <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1.5">Quantidade</label>
                                     <input 
                                         type="number" min="1" required
                                         value={editingSale.quantity}
                                         onChange={e => setEditingSale(prev => ({ ...prev, quantity: e.target.value }))}
-                                        className="w-full bg-brand-darkBg border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange"
+                                        className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange font-bold text-sm"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Valor Bruto (R$)</label>
+                                    <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1.5">Valor Bruto Total (R$)</label>
                                     <input 
                                         type="number" step="0.01" required
                                         value={editingSale.grossValue}
                                         onChange={e => setEditingSale(prev => ({ ...prev, grossValue: e.target.value }))}
-                                        className="w-full bg-brand-darkBg border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange"
+                                        className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange font-bold text-sm"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Frete Cobrado Nesta Venda (R$)</label>
+                                    <label className="block text-[10px] font-extrabold text-amber-400 uppercase tracking-widest mb-1.5">Frete Desta Venda (R$)</label>
                                     <input 
                                         type="number" step="0.01" required
                                         value={editingSale.shipping}
                                         onChange={e => setEditingSale(prev => ({ ...prev, shipping: e.target.value }))}
-                                        className="w-full bg-brand-darkBg border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange"
+                                        className="w-full bg-[#16161A] border border-amber-500/40 text-white rounded-xl p-3 focus:outline-none focus:border-amber-400 font-bold text-sm"
                                     />
                                 </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end pt-2">
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Status</label>
+                                    <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1.5">Status do Pedido</label>
                                     <select
                                         value={editingSale.status}
                                         onChange={e => setEditingSale(prev => ({ ...prev, status: e.target.value }))}
-                                        className="w-full bg-brand-darkBg border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange"
+                                        className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange font-bold text-sm"
                                     >
                                         {['Pago', 'Enviado', 'Entregue', 'Cancelado'].map(st => (
                                             <option key={st} value={st}>{st}</option>
                                         ))}
                                     </select>
                                 </div>
-                                <div className="flex items-end gap-2">
-                                    <button 
-                                        type="submit"
-                                        className="flex-1 bg-brand-orange hover:bg-brand-orange/80 text-white font-bold py-3 rounded-xl text-xs uppercase tracking-wider transition-all"
-                                    >
-                                        Salvar Venda
-                                    </button>
+
+                                <div className="flex gap-2">
                                     <button 
                                         type="button"
                                         onClick={() => setEditingSale(null)}
-                                        className="bg-white/5 border border-white/10 hover:bg-white/10 text-gray-400 font-bold py-3 px-4 rounded-xl text-xs uppercase tracking-wider transition-all"
+                                        className="flex-1 bg-white/5 border border-white/10 hover:bg-white/10 text-gray-300 font-bold py-3 px-4 rounded-xl text-xs uppercase tracking-wider transition-all"
                                     >
                                         Cancelar
                                     </button>
+                                    <button 
+                                        type="submit"
+                                        className="flex-1 btn-gradient text-black font-extrabold py-3 px-4 rounded-xl text-xs uppercase tracking-wider transition-all"
+                                    >
+                                        Salvar Venda
+                                    </button>
                                 </div>
-                            </form>
+                            </div>
+                        </form>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
                     <div className="flex justify-between items-center mb-6">
                         <h3 className="font-black text-xl text-gradient">Registro Geral de Vendas</h3>
                         
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <button 
+                                type="button"
+                                onClick={handleSyncBlingFromSales}
+                                disabled={isSyncingBling}
+                                className="py-1.5 px-3 rounded-xl text-xs font-bold border border-brand-orange/40 bg-brand-orange/10 hover:bg-brand-orange text-brand-orange hover:text-black transition-all flex items-center gap-1.5 shadow-sm"
+                                title="Sincronizar pedidos mais recentes do Bling ERP (TikTok Shop, Shopee e Mercado Livre)"
+                            >
+                                {isSyncingBling ? (
+                                    <>
+                                        <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
+                                        <span>Sincronizando...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                        <span>Sincronizar Bling / TikTok</span>
+                                    </>
+                                )}
+                            </button>
+
                             {['Todos', 'Pago', 'Enviado', 'Entregue', 'Cancelado'].map(status => (
                                 <button 
                                     key={status}
                                     onClick={() => setSelectedStatusFilter(status)}
-                                    className={`py-1.5 px-4 rounded-xl text-xs font-bold border transition-all ${selectedStatusFilter === status ? 'bg-brand-orange/20 border-brand-orange text-white' : 'bg-transparent border-brand-borderBg text-gray-400 hover:text-white'}`}
+                                    className={`py-1.5 px-3 md:px-4 rounded-xl text-xs font-bold border transition-all ${selectedStatusFilter === status ? 'bg-brand-orange/20 border-brand-orange text-white' : 'bg-transparent border-brand-borderBg text-gray-400 hover:text-white'}`}
                                 >
                                     {status}
                                 </button>
@@ -2892,9 +2947,9 @@
                     </div>
 
                     {/* Modal de Edição Rápida de Produto na Aba de Vendas */}
-                    {editingProductFromSales && (
-                        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-start justify-center p-4 pt-10 md:pt-14 z-[9999] overflow-y-auto animate-fade-in">
-                            <div className="bg-[#121215] border border-white/10 rounded-2xl w-full max-w-md p-6 relative shadow-2xl animate-scale-up my-auto">
+                    {editingProductFromSales && ReactDOM.createPortal(
+                        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-[999999] overflow-y-auto animate-fade-in" style={{ margin: 0, top: 0, left: 0, right: 0, bottom: 0 }}>
+                            <div className="bg-[#121215] border border-white/15 rounded-2xl w-full max-w-md p-6 relative shadow-2xl animate-scale-up max-h-[92vh] overflow-y-auto my-auto">
                                 <button 
                                     type="button"
                                     onClick={() => setEditingProductFromSales(null)}
@@ -3002,7 +3057,8 @@
                                     </button>
                                 </form>
                             </div>
-                        </div>
+                        </div>,
+                        document.body
                     )}
                 </div>
             );

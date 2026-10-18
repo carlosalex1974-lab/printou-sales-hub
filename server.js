@@ -2538,16 +2538,14 @@ app.get('/api/auth/bling/callback', async (req, res) => {
     }
 });
 
-// Endpoint para Sincronizar Pedidos do Bling em tempo real
-app.post('/api/bling/sync-orders', async (req, res) => {
-    try {
-        console.log("[BLING SYNC] Iniciando sincronização de pedidos...");
-        const accessToken = await getBlingValidAccessToken();
-        // Fetch nativo global do Node 24
-        const fetch = globalThis.fetch;
+// Função central de sincronização de pedidos do Bling (usada pelo Endpoint e pelo Auto-Sync)
+async function syncBlingOrdersCore() {
+    console.log("[BLING SYNC] Iniciando sincronização de pedidos...");
+    const accessToken = await getBlingValidAccessToken();
+    const fetch = globalThis.fetch;
 
-        // Busca os últimos 100 pedidos no Bling (ordenados pelos mais recentes)
-        const blingRes = await fetch('https://api.bling.com.br/Api/v3/pedidos/vendas?limite=100', {
+    // Busca os últimos 100 pedidos no Bling (criterio=1: mais recentes primeiro)
+    const blingRes = await fetch('https://api.bling.com.br/Api/v3/pedidos/vendas?limite=100&criterio=1', {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${accessToken}`,
@@ -2690,16 +2688,26 @@ app.post('/api/bling/sync-orders', async (req, res) => {
         await saveDb(db);
         console.log(`[BLING SYNC] Concluído! ${newSalesCount} novas vendas adicionadas.`);
 
-        res.json({
+        
+        return {
             success: true,
             newSalesCount,
             updatedCount,
             totalFound: orders.length,
             message: `Sincronização concluída: ${newSalesCount} novas vendas importadas do Bling!`
-        });
-
+        };
     } catch (err) {
         console.error("[BLING SYNC ERROR]:", err);
+        throw err;
+    }
+}
+
+// Endpoint para Sincronizar Pedidos do Bling em tempo real
+app.post('/api/bling/sync-orders', async (req, res) => {
+    try {
+        const result = await syncBlingOrdersCore();
+        res.json(result);
+    } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
@@ -2858,6 +2866,15 @@ app.listen(PORT, () => {
     setInterval(() => {
         pollCancelledOrders();
     }, 10 * 60 * 1000);
+
+    // Auto-Sync periódico do Bling (TikTok Shop / Shopee / ML Bling) a cada 3 minutos
+    setInterval(() => {
+        syncBlingOrdersCore().catch(e => {
+            if (!e.message?.includes('não configuradas')) {
+                console.error('[AUTO-SYNC BLING] Erro no poller:', e.message);
+            }
+        });
+    }, POLL_INTERVAL_MS);
 });
 
 
