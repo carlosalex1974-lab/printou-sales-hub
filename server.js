@@ -2778,7 +2778,7 @@ app.post('/api/bling/sync-products', async (req, res) => {
             const blingSku = String(bp.codigo || '').trim();
             const blingId = String(bp.id);
             const blingName = String(bp.nome || '').trim();
-            const cost = parseFloat(bp.precoCusto) || 0;
+            const cost = parseFloat(bp.precoCusto) || parseFloat(bp.fornecedor?.precoCusto) || parseFloat(bp.fornecedor?.precoCompra) || 0;
             const price = parseFloat(bp.preco) || 0;
             const stock = parseInt(bp.estoque?.saldoFisicoTotal ?? bp.estoque?.saldoVirtualTotal ?? 0) || 0;
 
