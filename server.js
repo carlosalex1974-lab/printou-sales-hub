@@ -2540,6 +2540,7 @@ app.get('/api/auth/bling/callback', async (req, res) => {
 
 // Função central de sincronização de pedidos do Bling (usada pelo Endpoint e pelo Auto-Sync)
 async function syncBlingOrdersCore() {
+    try {
     console.log("[BLING SYNC] Iniciando sincronização de pedidos...");
     const accessToken = await getBlingValidAccessToken();
     const fetch = globalThis.fetch;
@@ -2555,7 +2556,7 @@ async function syncBlingOrdersCore() {
 
         const blingData = await blingRes.json();
         if (blingData.error) {
-            return res.status(400).json({ error: `Erro na API do Bling: ${JSON.stringify(blingData.error)}` });
+            throw new Error("Erro na API do Bling: " + JSON.stringify(blingData.error));
         }
 
         const orders = blingData.data || [];
@@ -2712,6 +2713,25 @@ app.post('/api/bling/sync-orders', async (req, res) => {
     }
 });
 
+// Webhook em tempo real do Bling ERP (recebe notificações instantâneas de novos pedidos e atualizações)
+app.post('/api/webhooks/bling', async (req, res) => {
+    // Responde 200 OK imediatamente para não dar timeout no Bling
+    res.status(200).json({ success: true, received: true });
+
+    try {
+        console.log('=========================================');
+        console.log('⚡ [BLING WEBHOOK] NOTIFICAÇÃO EM TEMPO REAL RECEBIDA');
+        console.log('Body:', JSON.stringify(req.body));
+        await syncBlingOrdersCore();
+    } catch (err) {
+        console.error('[BLING WEBHOOK ERROR]', err.message);
+    }
+});
+
+app.get('/api/webhooks/bling', (req, res) => {
+    res.send('Webhook do Bling ativo e pronto para receber notificações em tempo real!');
+});
+
 // Endpoint para consultar status do Bling
 
 // Endpoint para sincronizar Catálogo de Produtos e Custos com o Bling ERP
@@ -2855,6 +2875,11 @@ app.listen(PORT, () => {
         sanitizeMongoSalesOnStartup();
         pollMercadoLivreOrders();
         pollCancelledOrders();
+        syncBlingOrdersCore().catch(e => {
+            if (!e.message?.includes('não configuradas')) {
+                console.error('[AUTO-SYNC BLING] Erro no startup:', e.message);
+            }
+        });
     }, 10000);
 
     // Poller contínuo a cada 3 minutos
@@ -2888,7 +2913,7 @@ app.use((req, res) => {
 // AUTO-SYNC POLLER — Busca vendas novas no ML a cada 3 minutos
 // Não depende de webhooks. Consulta a API do ML diretamente.
 // =====================================================
-const POLL_INTERVAL_MS = 3 * 60 * 1000; // 3 minutos
+const POLL_INTERVAL_MS = 2 * 60 * 1000; // 2 minutos (alta frequência para tempo real)
 
 async function pollMercadoLivreOrders() {
     const accountKeys = ['mercadolivre', 'mercadolivre2'];

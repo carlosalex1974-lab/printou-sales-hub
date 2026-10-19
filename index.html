@@ -4603,6 +4603,36 @@
                                 {blingSyncing ? 'Sincronizando...' : '🔄 Sincronizar Vendas'}
                             </button>
                         </div>
+
+                        {/* Caixa de Webhook em Tempo Real do Bling */}
+                        <div className="p-3.5 bg-black/40 border border-emerald-500/30 rounded-xl space-y-2 mt-2">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-extrabold text-emerald-400 flex items-center gap-1.5">
+                                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                                    Webhook em Tempo Real (0s de espera)
+                                </span>
+                                <span className="text-[9px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded-full border border-emerald-500/30">Ativo no Servidor</span>
+                            </div>
+                            <p className="text-[10px] text-gray-400 leading-relaxed">
+                                O servidor já busca vendas no Bling automaticamente a cada 2 minutos. Para receber vendas no <strong>exato segundo em que caem no TikTok, Shopee ou ML</strong>, configure esta URL no Bling:
+                            </p>
+                            <div className="flex items-center gap-2 bg-[#121215] p-2 rounded-lg border border-white/10 text-[11px] font-mono text-gray-200 select-all">
+                                <span className="truncate flex-1">https://printou-sales-hub.onrender.com/api/webhooks/bling</span>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        navigator.clipboard.writeText("https://printou-sales-hub.onrender.com/api/webhooks/bling");
+                                        alert("URL do Webhook copiada para a área de transferência!");
+                                    }}
+                                    className="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-white rounded text-[10px] font-bold transition-all"
+                                >
+                                    Copiar URL
+                                </button>
+                            </div>
+                            <p className="text-[9px] text-gray-500">
+                                💡 No Bling, vá em: <strong>Preferências (engrenagem) ➔ Configurações de Integrações ➔ Webhooks</strong> (ou Notificações de Vendas) e cadastre esta URL para o evento de <strong>Pedidos de Venda</strong>.
+                            </p>
+                        </div>
                     </div>
                 </div>
 
