@@ -6493,42 +6493,71 @@
                 }
             };
 
+            // Classificação inteligente de filamentos vs peças vs 3D sob encomenda
+            const filamentProducts = useMemo(() => {
+                return products.filter(p => {
+                    const name = (p.name || '').toLowerCase();
+                    return name.includes('filamento') || name.includes('refil');
+                });
+            }, [products]);
+
+            const partsProducts = useMemo(() => {
+                return products.filter(p => {
+                    const name = (p.name || '').toLowerCase();
+                    return p.type === 'resale' && !name.includes('filamento') && !name.includes('refil');
+                });
+            }, [products]);
+
+            const printProducts = useMemo(() => products.filter(p => p.type !== 'resale'), [products]);
+
+            const filamentUnits = useMemo(() => {
+                return filamentProducts.reduce((acc, p) => acc + (parseInt(p.stock) || 0), 0);
+            }, [filamentProducts]);
+
+            const filamentCapital = useMemo(() => {
+                return filamentProducts.reduce((acc, p) => {
+                    const st = parseInt(p.stock) || 0;
+                    const cost = parseFloat(p.acquisitionCost) || 0;
+                    return acc + (st * cost);
+                }, 0);
+            }, [filamentProducts]);
+
+            const partsUnits = useMemo(() => {
+                return partsProducts.reduce((acc, p) => acc + (parseInt(p.stock) || 0), 0);
+            }, [partsProducts]);
+
+            const partsCapital = useMemo(() => {
+                return partsProducts.reduce((acc, p) => {
+                    const st = parseInt(p.stock) || 0;
+                    const cost = parseFloat(p.acquisitionCost) || 0;
+                    return acc + (st * cost);
+                }, 0);
+            }, [partsProducts]);
+
+            const totalPhysicalUnits = filamentUnits + partsUnits;
+            const totalCapitalInvested = filamentCapital + partsCapital;
+
             const filteredProducts = useMemo(() => {
                 return products.filter(prod => {
-                    const matchesSearch = prod.name.toLowerCase().includes(search.toLowerCase()) || 
-                                          prod.id.toLowerCase().includes(search.toLowerCase());
-                    const matchesType = filterType === 'all' || prod.type === filterType;
+                    const name = (prod.name || '').toLowerCase();
+                    const matchesSearch = name.includes(search.toLowerCase()) || 
+                                          (prod.id || '').toLowerCase().includes(search.toLowerCase());
+                    const isFilament = name.includes('filamento') || name.includes('refil');
+                    const isPart = prod.type === 'resale' && !isFilament;
+                    const is3D = prod.type === '3d';
+
+                    let matchesType = true;
+                    if (filterType === 'filaments') matchesType = isFilament;
+                    else if (filterType === 'parts') matchesType = isPart;
+                    else if (filterType === '3d') matchesType = is3D;
+                    else if (filterType === 'resale') matchesType = prod.type === 'resale';
+
                     const matchesLow = !filterLowStock || (prod.stock || 0) <= (prod.alertThreshold || 3);
                     return matchesSearch && matchesType && matchesLow;
                 });
             }, [products, search, filterType, filterLowStock]);
 
             const [syncingBling, setSyncingBling] = useState(false);
-
-            const resaleProducts = useMemo(() => products.filter(p => p.type === 'resale'), [products]);
-            const printProducts = useMemo(() => products.filter(p => p.type !== 'resale'), [products]);
-
-            const totalPhysicalUnits = useMemo(() => {
-                return resaleProducts.reduce((acc, p) => acc + (parseInt(p.stock) || 0), 0);
-            }, [resaleProducts]);
-
-            const totalCapitalInvested = useMemo(() => {
-                return resaleProducts.reduce((acc, p) => {
-                    const st = parseInt(p.stock) || 0;
-                    const cost = parseFloat(p.acquisitionCost) || 0;
-                    return acc + (st * cost);
-                }, 0);
-            }, [resaleProducts]);
-
-            const projectedGrossProfit = useMemo(() => {
-                return resaleProducts.reduce((acc, p) => {
-                    const st = parseInt(p.stock) || 0;
-                    const cost = parseFloat(p.acquisitionCost) || 0;
-                    const price = parseFloat(p.price) || 0;
-                    const diff = price - cost;
-                    return acc + (st * (diff > 0 ? diff : 0));
-                }, 0);
-            }, [resaleProducts]);
 
             const handleSyncBlingCatalog = async () => {
                 try {
@@ -6559,7 +6588,7 @@
                                 Controle de Estoque & Capital Investido
                             </h2>
                             <p className="text-gray-400 text-xs mt-1">
-                                Monitore com precisão o dinheiro imobilizado em peças/filamentos e separe produtos sob encomenda.
+                                Gestão dedicada para estoque de filamentos e peças (capital investido) e itens sob encomenda.
                             </p>
                         </div>
                         <div className="flex flex-wrap gap-3 items-center">
@@ -6585,53 +6614,53 @@
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         <div className="glass-panel p-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/5">
                             <div className="flex justify-between items-start">
-                                <span className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-400">Capital Investido</span>
+                                <span className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-400">Capital Total Investido</span>
                                 <span className="text-xs">💰</span>
                             </div>
                             <div className="text-2xl font-black text-emerald-400 mt-2">
                                 R$ {totalCapitalInvested.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </div>
                             <span className="text-[10px] text-gray-400 mt-1 block">
-                                Dinheiro imobilizado em prateleira
-                            </span>
-                        </div>
-
-                        <div className="glass-panel p-5 rounded-2xl border border-blue-500/20 bg-blue-500/5">
-                            <div className="flex justify-between items-start">
-                                <span className="text-[10px] font-extrabold uppercase tracking-widest text-blue-400">Estoque Físico Total</span>
-                                <span className="text-xs">📦</span>
-                            </div>
-                            <div className="text-2xl font-black text-white mt-2">
-                                {totalPhysicalUnits} <span className="text-xs font-normal text-gray-400">unidades</span>
-                            </div>
-                            <span className="text-[10px] text-gray-400 mt-1 block">
-                                {resaleProducts.length} itens de revenda/peças
-                            </span>
-                        </div>
-
-                        <div className="glass-panel p-5 rounded-2xl border border-amber-500/20 bg-amber-500/5">
-                            <div className="flex justify-between items-start">
-                                <span className="text-[10px] font-extrabold uppercase tracking-widest text-amber-400">Lucro Bruto Projetado</span>
-                                <span className="text-xs">📈</span>
-                            </div>
-                            <div className="text-2xl font-black text-amber-400 mt-2">
-                                R$ {projectedGrossProfit.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </div>
-                            <span className="text-[10px] text-gray-400 mt-1 block">
-                                Margem ao liquidar o estoque físico
+                                Filamentos + Peças na prateleira
                             </span>
                         </div>
 
                         <div className="glass-panel p-5 rounded-2xl border border-purple-500/20 bg-purple-500/5">
                             <div className="flex justify-between items-start">
-                                <span className="text-[10px] font-extrabold uppercase tracking-widest text-purple-400">Sob Encomenda (3D)</span>
+                                <span className="text-[10px] font-extrabold uppercase tracking-widest text-purple-400">Estoque de Filamentos</span>
+                                <span className="text-xs">🧵</span>
+                            </div>
+                            <div className="text-2xl font-black text-white mt-2">
+                                {filamentUnits} <span className="text-xs font-normal text-purple-300">carretéis (1kg)</span>
+                            </div>
+                            <span className="text-[10px] text-purple-300 font-semibold mt-1 block">
+                                R$ {filamentCapital.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} investidos ({filamentProducts.length} tipos)
+                            </span>
+                        </div>
+
+                        <div className="glass-panel p-5 rounded-2xl border border-blue-500/20 bg-blue-500/5">
+                            <div className="flex justify-between items-start">
+                                <span className="text-[10px] font-extrabold uppercase tracking-widest text-blue-400">Estoque de Peças & Insumos</span>
+                                <span className="text-xs">⚙️</span>
+                            </div>
+                            <div className="text-2xl font-black text-white mt-2">
+                                {partsUnits} <span className="text-xs font-normal text-blue-300">unidades</span>
+                            </div>
+                            <span className="text-[10px] text-blue-300 font-semibold mt-1 block">
+                                R$ {partsCapital.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} investidos ({partsProducts.length} itens)
+                            </span>
+                        </div>
+
+                        <div className="glass-panel p-5 rounded-2xl border border-amber-500/20 bg-amber-500/5">
+                            <div className="flex justify-between items-start">
+                                <span className="text-[10px] font-extrabold uppercase tracking-widest text-amber-400">Sob Encomenda (3D)</span>
                                 <span className="text-xs">🖨️</span>
                             </div>
-                            <div className="text-2xl font-black text-purple-300 mt-2">
+                            <div className="text-2xl font-black text-amber-300 mt-2">
                                 {printProducts.length} <span className="text-xs font-normal text-gray-400">modelos</span>
                             </div>
                             <span className="text-[10px] text-gray-400 mt-1 block">
-                                Produção sob demanda (sem estoque travado)
+                                Produção sob demanda (R$ 0 imobilizado)
                             </span>
                         </div>
                     </div>
@@ -6767,9 +6796,10 @@
                                 onChange={e => setFilterType(e.target.value)}
                                 className="w-full bg-[#16161A] border border-brand-borderBg text-white rounded-xl p-3 focus:outline-none focus:border-brand-orange text-xs font-bold"
                             >
-                                <option value="all">Todos os Tipos</option>
-                                <option value="resale">Revenda Geral</option>
-                                <option value="3d">Impressão 3D</option>
+                                <option value="all">📦 Todos os Itens</option>
+                                <option value="filaments">🧵 Filamentos (Carretéis de 1kg)</option>
+                                <option value="parts">⚙️ Peças & Acessórios (Placas, Bicos, Insumos)</option>
+                                <option value="3d">🖨️ Impressão 3D (Sob Encomenda)</option>
                             </select>
                         </div>
 
@@ -6807,7 +6837,7 @@
                                 <tbody className="divide-y divide-white/5">
                                     {filteredProducts.length === 0 ? (
                                         <tr>
-                                            <td colSpan="8" className="py-12 text-center text-gray-500 font-semibold">
+                                            <td colSpan="9" className="py-12 text-center text-gray-500 font-semibold">
                                                 Nenhum produto encontrado com os filtros ativos.
                                             </td>
                                         </tr>
@@ -6816,6 +6846,11 @@
                                             const minLimit = prod.alertThreshold || 3;
                                             const isLow = (prod.stock || 0) <= minLimit;
                                             const unitCost = calculateCost ? calculateCost(prod) : (prod.acquisitionCost || 0);
+                                            const name = (prod.name || '').toLowerCase();
+                                            const isFilament = name.includes('filamento') || name.includes('refil');
+                                            const isPart = prod.type === 'resale' && !isFilament;
+                                            const is3D = prod.type === '3d';
+                                            const capital = (prod.stock || 0) * unitCost;
                                             return (
                                                 <tr key={prod.id} className="hover:bg-white/5 transition-all">
                                                     <td className="py-4 px-6 font-mono text-xs text-gray-400">
@@ -6837,22 +6872,42 @@
                                                         </div>
                                                     </td>
                                                     <td className="py-4 px-6 text-center text-xs font-semibold text-gray-300">
-                                                        {prod.supplierId || 'Direto / Próprio'}
+                                                        {prod.supplierId || 'Bling / Direto'}
                                                     </td>
-                                                    <td className="py-4 px-6 text-center font-bold text-white">
+                                                    <td className="py-4 px-6 text-center text-xs whitespace-nowrap">
+                                                        {isFilament && (
+                                                            <span className="text-[10px] font-extrabold px-2.5 py-1 rounded-md bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                                                                🧵 Filamento
+                                                            </span>
+                                                        )}
+                                                        {isPart && (
+                                                            <span className="text-[10px] font-extrabold px-2.5 py-1 rounded-md bg-blue-500/10 text-blue-300 border border-blue-500/20">
+                                                                ⚙️ Peça / Insumo
+                                                            </span>
+                                                        )}
+                                                        {is3D && (
+                                                            <span className="text-[10px] font-extrabold px-2.5 py-1 rounded-md bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                                                                🖨️ Sob Encomenda
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                    <td className="py-4 px-6 text-center font-bold text-white whitespace-nowrap">
                                                         R$ {unitCost.toFixed(2)}
                                                     </td>
-                                                    <td className="py-4 px-6 text-center">
-                                                        <span className={`text-base font-black px-3 py-1.5 rounded-xl border ${
+                                                    <td className="py-4 px-6 text-center whitespace-nowrap">
+                                                        <span className={`text-sm font-black px-3 py-1 rounded-xl border ${
                                                             isLow 
                                                                 ? 'bg-rose-500/10 text-rose-400 border-rose-500/20 animate-pulse' 
                                                                 : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                                                         }`}>
-                                                            {prod.stock || 0} un
+                                                            {prod.stock || 0} {isFilament ? 'rolos' : 'un'}
                                                         </span>
                                                         {isLow && (
-                                                            <div className="text-[8px] text-rose-400 font-bold uppercase tracking-widest mt-2">Abaixo de {minLimit} un</div>
+                                                            <div className="text-[8px] text-rose-400 font-bold uppercase tracking-widest mt-1">Abaixo de {minLimit}</div>
                                                         )}
+                                                    </td>
+                                                    <td className="py-4 px-6 text-center font-extrabold text-emerald-400 whitespace-nowrap">
+                                                        R$ {capital.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                     </td>
                                                     <td className="py-4 px-6 text-center">
                                                         <input 
@@ -6866,7 +6921,7 @@
                                                                     e.target.blur();
                                                                 }
                                                             }}
-                                                            className="w-16 bg-[#16161A] border border-white/5 text-white rounded-lg p-1.5 text-center text-xs font-extrabold focus:outline-none focus:border-brand-orange"
+                                                            className="w-16 bg-[#16161A] border border-white/10 text-white rounded-lg p-1.5 text-center text-xs font-extrabold focus:outline-none focus:border-brand-orange"
                                                         />
                                                     </td>
                                                     <td className="py-4 px-6 text-right space-x-2">
