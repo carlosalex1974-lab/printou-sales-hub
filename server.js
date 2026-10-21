@@ -76,7 +76,8 @@ const DEFAULT_DB = {
     integrationLogs: [],
     accounts: [
         { id: 'caixa-principal', name: 'Conta Bancária Principal', type: 'bank' },
-        { id: 'mercado-pago', name: 'Mercado Pago', type: 'wallet' }
+        { id: 'mercado-pago', name: 'Mercado Pago', type: 'wallet' },
+        { id: 'tiktok-shop', name: 'TikTok Shop', type: 'wallet' }
     ],
     transactions: [],
     credentials: {
@@ -164,10 +165,16 @@ async function readDb() {
     db.monthlyClosings = db.monthlyClosings || [];
     
     // Assegurar arrays do módulo de Caixa
-    db.accounts = db.accounts || [
-        { id: 'caixa-principal', name: 'Conta Bancária Principal', type: 'bank' },
-        { id: 'mercado-pago', name: 'Mercado Pago', type: 'wallet' }
-    ];
+    db.accounts = db.accounts || [];
+    if (!db.accounts.find(a => a.id === 'caixa-principal')) {
+        db.accounts.push({ id: 'caixa-principal', name: 'Conta Bancária Principal', type: 'bank' });
+    }
+    if (!db.accounts.find(a => a.id === 'mercado-pago')) {
+        db.accounts.push({ id: 'mercado-pago', name: 'Mercado Pago', type: 'wallet' });
+    }
+    if (!db.accounts.find(a => a.id === 'tiktok-shop')) {
+        db.accounts.push({ id: 'tiktok-shop', name: 'TikTok Shop', type: 'wallet' });
+    }
     db.transactions = db.transactions || [];
     
     return db;
