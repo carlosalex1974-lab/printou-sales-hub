@@ -303,6 +303,7 @@
 
         function SearchableProductSelect({ products = [], selectedProductId, onSelect, label = "Produto Vendido" }) {
             const [searchTerm, setSearchTerm] = useState('');
+                const [activeInfoTooltip, setActiveInfoTooltip] = useState(null);
             const [isOpen, setIsOpen] = useState(false);
             const containerRef = useRef(null);
 
@@ -7435,32 +7436,132 @@
                             </div>
                         </div>
 
-                        {/* 4 Cards Principais de Liquidez */}
+                        {/* 4 Cards Principais de Liquidez com Ícones Informativos */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                             {/* Card 1: Saldo Consolidado */}
-                            <div className="glass-panel p-5 rounded-2xl border border-white/10 relative overflow-hidden group shadow-lg">
-                                <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-all">
-                                    <i data-lucide="wallet" className="w-20 h-20 text-white"></i>
+                            <div className="glass-panel p-5 rounded-2xl border border-white/10 relative group shadow-lg hover:border-white/20 transition-all">
+                                <div className="absolute inset-0 overflow-hidden rounded-2xl pointer-events-none">
+                                    <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-all">
+                                        <i data-lucide="wallet" className="w-20 h-20 text-white"></i>
+                                    </div>
                                 </div>
-                                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Patrimônio Líquido Disponível</span>
-                                <div className="text-3xl font-black text-white mt-1">
+                                <div className="flex justify-between items-start relative z-20">
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Patrimônio Líquido Disponível</span>
+                                    
+                                    {/* Ícone Informativo e Tooltip */}
+                                    <div className="relative group/info">
+                                        <button 
+                                            type="button"
+                                            onClick={() => setActiveInfoTooltip(activeInfoTooltip === 'total' ? null : 'total')}
+                                            className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+                                            title="Clique ou passe o mouse para entender a origem deste valor"
+                                        >
+                                            <i data-lucide="info" className="w-4 h-4"></i>
+                                        </button>
+                                        <div className={`absolute top-full left-0 mt-2 w-80 p-4 bg-[#181822] border border-white/20 rounded-2xl shadow-2xl text-xs z-50 transition-all duration-200 ${activeInfoTooltip === 'total' ? 'opacity-100 visible pointer-events-auto' : 'opacity-0 invisible pointer-events-none group-hover/info:opacity-100 group-hover/info:visible group-hover/info:pointer-events-auto'}`}>
+                                            <div className="flex items-center gap-1.5 font-bold text-white text-sm mb-2 pb-2 border-b border-white/10">
+                                                <i data-lucide="wallet" className="w-4 h-4 text-emerald-400"></i>
+                                                <span>Origem do Saldo Total</span>
+                                            </div>
+                                            <p className="text-gray-300 text-[11px] mb-3 leading-relaxed">
+                                                Soma consolidada de toda a liquidez disponível em tempo real nas carteiras digitais e no banco:
+                                            </p>
+                                            <div className="space-y-1.5 text-[11px]">
+                                                <div className="flex justify-between items-center py-1.5 px-2 rounded bg-white/5">
+                                                    <span className="text-blue-400 font-semibold flex items-center gap-1.5">
+                                                        <span className="w-2 h-2 rounded-full bg-blue-400"></span> Mercado Pago (ML):
+                                                    </span>
+                                                    <span className="font-bold text-white">{formatBRL(mpBalance)}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center py-1.5 px-2 rounded bg-white/5">
+                                                    <span className="text-pink-400 font-semibold flex items-center gap-1.5">
+                                                        <span className="w-2 h-2 rounded-full bg-[#fe0979]"></span> TikTok Shop:
+                                                    </span>
+                                                    <span className="font-bold text-white">{formatBRL(tiktokBalance)}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center py-1.5 px-2 rounded bg-white/5">
+                                                    <span className="text-emerald-400 font-semibold flex items-center gap-1.5">
+                                                        <span className="w-2 h-2 rounded-full bg-emerald-400"></span> Conta Bancária:
+                                                    </span>
+                                                    <span className="font-bold text-white">{formatBRL(bankBalance)}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center pt-2 mt-2 border-t border-white/10 font-black text-xs">
+                                                    <span className="text-gray-300">Total Líquido Consolidado:</span>
+                                                    <span className="text-emerald-400 text-sm">{formatBRL(totalBalance)}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="text-3xl font-black text-white mt-1 relative z-10">
                                     {formatBRL(totalBalance)}
                                 </div>
-                                <div className="flex items-center gap-1.5 mt-3 text-[11px] text-gray-400">
+                                <div className="flex items-center gap-1.5 mt-3 text-[11px] text-gray-400 relative z-10">
                                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
                                     <span>Soma de Banco + MP + TikTok</span>
                                 </div>
                             </div>
 
                             {/* Card 2: Mercado Pago (Mercado Livre) */}
-                            <div className="glass-panel p-5 rounded-2xl border border-blue-500/30 relative overflow-hidden group shadow-lg bg-gradient-to-br from-blue-950/20 to-transparent">
-                                <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-25 transition-all text-blue-400">
-                                    <i data-lucide="shopping-bag" className="w-20 h-20"></i>
+                            <div className="glass-panel p-5 rounded-2xl border border-blue-500/30 relative group shadow-lg bg-gradient-to-br from-blue-950/20 to-transparent hover:border-blue-500/50 transition-all">
+                                <div className="absolute inset-0 overflow-hidden rounded-2xl pointer-events-none">
+                                    <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-25 transition-all text-blue-400">
+                                        <i data-lucide="shopping-bag" className="w-20 h-20"></i>
+                                    </div>
                                 </div>
-                                <div className="flex justify-between items-start">
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-blue-400 flex items-center gap-1.5">
-                                        <span className="w-2 h-2 rounded-full bg-blue-400"></span> Mercado Pago (ML)
-                                    </span>
+                                <div className="flex justify-between items-start relative z-20">
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-blue-400 flex items-center gap-1.5">
+                                            <span className="w-2 h-2 rounded-full bg-blue-400"></span> Mercado Pago (ML)
+                                        </span>
+                                        
+                                        {/* Ícone Informativo e Tooltip */}
+                                        <div className="relative group/info">
+                                            <button 
+                                                type="button"
+                                                onClick={() => setActiveInfoTooltip(activeInfoTooltip === 'mp' ? null : 'mp')}
+                                                className="text-blue-400/70 hover:text-blue-300 p-0.5 rounded hover:bg-blue-500/10 transition-colors cursor-pointer"
+                                                title="Clique ou passe o mouse para entender a origem deste valor"
+                                            >
+                                                <i data-lucide="info" className="w-3.5 h-3.5"></i>
+                                            </button>
+                                            <div className={`absolute top-full left-0 mt-2 w-80 p-4 bg-[#181822] border border-blue-500/30 rounded-2xl shadow-2xl text-xs z-50 transition-all duration-200 ${activeInfoTooltip === 'mp' ? 'opacity-100 visible pointer-events-auto' : 'opacity-0 invisible pointer-events-none group-hover/info:opacity-100 group-hover/info:visible group-hover/info:pointer-events-auto'}`}>
+                                                <div className="flex items-center gap-1.5 font-bold text-blue-400 text-sm mb-2 pb-2 border-b border-white/10">
+                                                    <i data-lucide="shopping-bag" className="w-4 h-4"></i>
+                                                    <span>Cálculo do Saldo Mercado Pago</span>
+                                                </div>
+                                                <p className="text-gray-300 text-[11px] mb-3 leading-relaxed">
+                                                    Saldo líquido real acumulado das vendas do Mercado Livre, deduzindo taxas, fretes e saques/gastos já realizados:
+                                                </p>
+                                                <div className="space-y-1.5 text-[11px]">
+                                                    <div className="flex justify-between items-center text-gray-300">
+                                                        <span>(+) Vendas Brutas ML ({mlAll.count} pedidos):</span>
+                                                        <span className="font-semibold text-white">{formatBRL(mlAll.gross)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center text-rose-400">
+                                                        <span>(-) Comissões & Taxas ML:</span>
+                                                        <span className="font-semibold">-{formatBRL(mlAll.fees)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center text-rose-400">
+                                                        <span>(-) Fretes Pagos pelo Vendedor:</span>
+                                                        <span className="font-semibold">-{formatBRL(mlAll.shipping)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center text-emerald-400 font-bold py-1 px-2 rounded bg-emerald-500/10 border border-emerald-500/20">
+                                                        <span>(=) Faturamento Líquido ML:</span>
+                                                        <span>+{formatBRL(mlAll.net)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center text-rose-400 pt-1">
+                                                        <span>(-) Saques & Despesas Pagas no MP:</span>
+                                                        <span className="font-semibold">-{formatBRL(mpTx.out)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center pt-2 mt-2 border-t border-white/10 font-black text-xs">
+                                                        <span className="text-white">👉 Saldo Atual em Carteira:</span>
+                                                        <span className="text-blue-400 text-sm">{formatBRL(mpBalance)}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                     <button 
                                         onClick={() => openTransferModal('mercado-pago', 'caixa-principal')}
                                         className="text-[10px] bg-blue-500/20 hover:bg-blue-500/40 text-blue-300 font-bold px-2 py-0.5 rounded transition-all flex items-center gap-1"
@@ -7469,24 +7570,75 @@
                                         <i data-lucide="arrow-right" className="w-3 h-3"></i> Repassar
                                     </button>
                                 </div>
-                                <div className="text-2xl font-black text-white mt-1">
+                                <div className="text-2xl font-black text-white mt-1 relative z-10">
                                     {formatBRL(mpBalance)}
                                 </div>
-                                <div className="mt-3 pt-2 border-t border-white/5 flex justify-between items-center text-[11px]">
+                                <div className="mt-3 pt-2 border-t border-white/5 flex justify-between items-center text-[11px] relative z-10">
                                     <span className="text-gray-400">Fat. Líquido ({viewPeriod === 'ALL' ? 'Total' : viewPeriod}):</span>
                                     <span className="text-blue-300 font-bold">{formatBRL(mlPeriod.net)}</span>
                                 </div>
                             </div>
 
                             {/* Card 3: TikTok Shop */}
-                            <div className="glass-panel p-5 rounded-2xl border border-pink-500/30 relative overflow-hidden group shadow-lg bg-gradient-to-br from-pink-950/20 to-transparent">
-                                <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-25 transition-all text-[#fe0979]">
-                                    <i data-lucide="music-2" className="w-20 h-20"></i>
+                            <div className="glass-panel p-5 rounded-2xl border border-pink-500/30 relative group shadow-lg bg-gradient-to-br from-pink-950/20 to-transparent hover:border-pink-500/50 transition-all">
+                                <div className="absolute inset-0 overflow-hidden rounded-2xl pointer-events-none">
+                                    <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-25 transition-all text-[#fe0979]">
+                                        <i data-lucide="music-2" className="w-20 h-20"></i>
+                                    </div>
                                 </div>
-                                <div className="flex justify-between items-start">
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-pink-400 flex items-center gap-1.5">
-                                        <span className="w-2 h-2 rounded-full bg-[#fe0979]"></span> TikTok Shop
-                                    </span>
+                                <div className="flex justify-between items-start relative z-20">
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-pink-400 flex items-center gap-1.5">
+                                            <span className="w-2 h-2 rounded-full bg-[#fe0979]"></span> TikTok Shop
+                                        </span>
+                                        
+                                        {/* Ícone Informativo e Tooltip */}
+                                        <div className="relative group/info">
+                                            <button 
+                                                type="button"
+                                                onClick={() => setActiveInfoTooltip(activeInfoTooltip === 'tiktok' ? null : 'tiktok')}
+                                                className="text-pink-400/70 hover:text-pink-300 p-0.5 rounded hover:bg-pink-500/10 transition-colors cursor-pointer"
+                                                title="Clique ou passe o mouse para entender a origem deste valor"
+                                            >
+                                                <i data-lucide="info" className="w-3.5 h-3.5"></i>
+                                            </button>
+                                            <div className={`absolute top-full right-0 sm:left-0 mt-2 w-80 p-4 bg-[#181822] border border-pink-500/30 rounded-2xl shadow-2xl text-xs z-50 transition-all duration-200 ${activeInfoTooltip === 'tiktok' ? 'opacity-100 visible pointer-events-auto' : 'opacity-0 invisible pointer-events-none group-hover/info:opacity-100 group-hover/info:visible group-hover/info:pointer-events-auto'}`}>
+                                                <div className="flex items-center gap-1.5 font-bold text-pink-400 text-sm mb-2 pb-2 border-b border-white/10">
+                                                    <i data-lucide="music-2" className="w-4 h-4"></i>
+                                                    <span>Cálculo do Saldo TikTok Shop</span>
+                                                </div>
+                                                <p className="text-gray-300 text-[11px] mb-3 leading-relaxed">
+                                                    Saldo líquido gerado pelas vendas no TikTok Shop retido na plataforma aguardando repasse:
+                                                </p>
+                                                <div className="space-y-1.5 text-[11px]">
+                                                    <div className="flex justify-between items-center text-gray-300">
+                                                        <span>(+) Vendas Brutas TikTok ({tiktokAll.count} pedidos):</span>
+                                                        <span className="font-semibold text-white">{formatBRL(tiktokAll.gross)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center text-rose-400">
+                                                        <span>(-) Taxa do TikTok Shop (5%):</span>
+                                                        <span className="font-semibold">-{formatBRL(tiktokAll.fees)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center text-rose-400">
+                                                        <span>(-) Fretes Pagos pelo Vendedor:</span>
+                                                        <span className="font-semibold">-{formatBRL(tiktokAll.shipping)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center text-emerald-400 font-bold py-1 px-2 rounded bg-emerald-500/10 border border-emerald-500/20">
+                                                        <span>(=) Faturamento Líquido Gerado:</span>
+                                                        <span>+{formatBRL(tiktokAll.net)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center text-rose-400 pt-1">
+                                                        <span>(-) Repasses / Saques já Realizados:</span>
+                                                        <span className="font-semibold">-{formatBRL(tiktokTx.out)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center pt-2 mt-2 border-t border-white/10 font-black text-xs">
+                                                        <span className="text-white">👉 Saldo Restante a Repassar:</span>
+                                                        <span className="text-pink-400 text-sm">{formatBRL(tiktokBalance)}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                     <button 
                                         onClick={() => openTransferModal('tiktok-shop', 'caixa-principal')}
                                         className="text-[10px] bg-pink-500/20 hover:bg-pink-500/40 text-pink-300 font-bold px-2 py-0.5 rounded transition-all flex items-center gap-1"
@@ -7495,27 +7647,75 @@
                                         <i data-lucide="arrow-right" className="w-3 h-3"></i> Repassar
                                     </button>
                                 </div>
-                                <div className="text-2xl font-black text-white mt-1">
+                                <div className="text-2xl font-black text-white mt-1 relative z-10">
                                     {formatBRL(tiktokBalance)}
                                 </div>
-                                <div className="mt-3 pt-2 border-t border-white/5 flex justify-between items-center text-[11px]">
+                                <div className="mt-3 pt-2 border-t border-white/5 flex justify-between items-center text-[11px] relative z-10">
                                     <span className="text-gray-400">Fat. Líquido ({viewPeriod === 'ALL' ? 'Total' : viewPeriod}):</span>
                                     <span className="text-pink-300 font-bold">{formatBRL(tiktokPeriod.net)}</span>
                                 </div>
                             </div>
 
                             {/* Card 4: Conta Bancária Principal */}
-                            <div className="glass-panel p-5 rounded-2xl border border-emerald-500/30 relative overflow-hidden group shadow-lg bg-gradient-to-br from-emerald-950/20 to-transparent">
-                                <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-25 transition-all text-emerald-400">
-                                    <i data-lucide="building" className="w-20 h-20"></i>
+                            <div className="glass-panel p-5 rounded-2xl border border-emerald-500/30 relative group shadow-lg bg-gradient-to-br from-emerald-950/20 to-transparent hover:border-emerald-500/50 transition-all">
+                                <div className="absolute inset-0 overflow-hidden rounded-2xl pointer-events-none">
+                                    <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-25 transition-all text-emerald-400">
+                                        <i data-lucide="building" className="w-20 h-20"></i>
+                                    </div>
                                 </div>
-                                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 flex items-center gap-1.5">
-                                    <span className="w-2 h-2 rounded-full bg-emerald-400"></span> Conta Bancária Principal
-                                </span>
-                                <div className="text-2xl font-black text-white mt-1">
+                                <div className="flex justify-between items-start relative z-20">
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 flex items-center gap-1.5">
+                                            <span className="w-2 h-2 rounded-full bg-emerald-400"></span> Conta Bancária Principal
+                                        </span>
+                                        
+                                        {/* Ícone Informativo e Tooltip */}
+                                        <div className="relative group/info">
+                                            <button 
+                                                type="button"
+                                                onClick={() => setActiveInfoTooltip(activeInfoTooltip === 'bank' ? null : 'bank')}
+                                                className="text-emerald-400/70 hover:text-emerald-300 p-0.5 rounded hover:bg-emerald-500/10 transition-colors cursor-pointer"
+                                                title="Clique ou passe o mouse para entender a origem deste valor"
+                                            >
+                                                <i data-lucide="info" className="w-3.5 h-3.5"></i>
+                                            </button>
+                                            <div className={`absolute top-full right-0 mt-2 w-80 p-4 bg-[#181822] border border-emerald-500/30 rounded-2xl shadow-2xl text-xs z-50 transition-all duration-200 ${activeInfoTooltip === 'bank' ? 'opacity-100 visible pointer-events-auto' : 'opacity-0 invisible pointer-events-none group-hover/info:opacity-100 group-hover/info:visible group-hover/info:pointer-events-auto'}`}>
+                                                <div className="flex items-center gap-1.5 font-bold text-emerald-400 text-sm mb-2 pb-2 border-b border-white/10">
+                                                    <i data-lucide="building" className="w-4 h-4"></i>
+                                                    <span>Cálculo da Conta Bancária</span>
+                                                </div>
+                                                <p className="text-gray-300 text-[11px] mb-3 leading-relaxed">
+                                                    Saldo disponível em conta corrente proveniente de vendas diretas/Pix à vista e repasses dos marketplaces:
+                                                </p>
+                                                <div className="space-y-1.5 text-[11px]">
+                                                    <div className="flex justify-between items-center text-gray-300">
+                                                        <span>(+) Vendas Diretas / Pix ({diretaAll.count} pedidos):</span>
+                                                        <span className="font-semibold text-emerald-400">+{formatBRL(diretaAll.net)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center text-gray-400 text-[10px] pl-2">
+                                                        <span>(8 pedidos balcão faturados fora dos canais)</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center text-blue-300 pt-1">
+                                                        <span>(+) Repasses Recebidos (MP + TikTok):</span>
+                                                        <span className="font-semibold">+{formatBRL(bankTx.in)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center text-rose-400">
+                                                        <span>(-) Despesas & Saídas Pagas pelo Banco:</span>
+                                                        <span className="font-semibold">-{formatBRL(bankTx.out)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center pt-2 mt-2 border-t border-white/10 font-black text-xs">
+                                                        <span className="text-white">👉 Saldo Atual em Conta:</span>
+                                                        <span className="text-emerald-400 text-sm">{formatBRL(bankBalance)}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="text-2xl font-black text-white mt-1 relative z-10">
                                     {formatBRL(bankBalance)}
                                 </div>
-                                <div className="mt-3 pt-2 border-t border-white/5 flex justify-between items-center text-[11px]">
+                                <div className="mt-3 pt-2 border-t border-white/5 flex justify-between items-center text-[11px] relative z-10">
                                     <span className="text-gray-400">Repasses Recebidos:</span>
                                     <span className="text-emerald-300 font-bold">+{formatBRL(bankTx.in)}</span>
                                 </div>
