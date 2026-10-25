@@ -2584,11 +2584,11 @@ async function syncBlingOrdersCore() {
             const rawObs = String(order.observacoes || '').toLowerCase();
             const rawNum = String(order.numeroLoja || '');
 
-            if (rawObs.includes('tiktok') || rawNum.startsWith('57') || rawNum.startsWith('58') || /^5\d{15,}/.test(rawNum) || rawLoja.includes('tiktok')) {
+            if (rawLoja === '206269479' || rawObs.includes('tiktok') || rawNum.startsWith('57') || rawNum.startsWith('58') || /^5\d{15,}/.test(rawNum) || rawLoja.includes('tiktok')) {
                 channelId = 'tiktok';
-            } else if (rawObs.includes('mercado') || rawObs.includes('meli') || rawNum.startsWith('2000') || rawNum.startsWith('MLB') || rawLoja.includes('ml')) {
+            } else if (rawLoja === '206264816' || rawLoja === '206342497' || rawObs.includes('mercado') || rawObs.includes('meli') || rawNum.startsWith('2000') || rawNum.startsWith('MLB') || rawLoja.includes('ml')) {
                 channelId = 'ml1';
-            } else if (rawObs.includes('shopee') || rawLoja.includes('shopee')) {
+            } else if (rawLoja.includes('shopee') || rawObs.includes('shopee')) {
                 channelId = 'shopee';
             }
 
