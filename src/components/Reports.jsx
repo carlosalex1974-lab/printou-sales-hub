@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import WeeklyAuditCard from './WeeklyAuditCard';
 
 export default function Reports({ sales, products, channels, compute, selectedMonth, expenses }) {
     const [periodPreset, setPeriodPreset] = useState('month'); // 'month', '7days', '30days', 'custom', 'all'
@@ -131,6 +132,9 @@ export default function Reports({ sales, products, channels, compute, selectedMo
                     Exportar Vendas do Período (CSV)
                 </button>
             </div>
+
+            {/* CARD DA CONFERÊNCIA SEMANAL AUTOMATIZADA */}
+            <WeeklyAuditCard />
 
             {/* SELETOR DE PERÍODO (DATA INÍCIO E FIM) */}
             <div className="glass-panel p-6 rounded-2xl border border-white/5 space-y-4">

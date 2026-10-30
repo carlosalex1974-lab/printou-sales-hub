@@ -5,6 +5,7 @@ import fs from 'fs';
 import { MongoClient } from 'mongodb';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { generateWeeklyAuditData, buildWeeklyAuditHtml, sendWeeklyAuditEmail } from './services/weeklyAuditService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -2867,6 +2868,123 @@ app.get('/api/bling/status', async (req, res) => {
     }
 });
 
+// ==========================================
+// WEEKLY AUDIT & EMAIL NOTIFICATIONS
+// ==========================================
+app.get('/api/reports/weekly-audit/status', async (req, res) => {
+    try {
+        const db = await readDb();
+        const config = db.weeklyReportConfig || {
+            enabled: true,
+            dayOfWeek: 1,
+            time: '09:00',
+            recipients: ['carlosalex1974@gmail.com', 'fabi.meneghetti@gmail.com'],
+            items: [1, 3, 4],
+            smtp: { user: 'carlosalex1974@gmail.com', hasPass: false },
+            lastSentAt: null
+        };
+        const hasPass = !!(config.smtp?.pass || process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD);
+        res.json({
+            ...config,
+            smtp: {
+                ...config.smtp,
+                hasPass,
+                pass: undefined // do not expose
+            }
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/reports/weekly-audit/config', async (req, res) => {
+    try {
+        const db = await readDb();
+        const existing = db.weeklyReportConfig || {};
+        const { enabled, recipients, items, smtpPass, smtpUser } = req.body;
+
+        db.weeklyReportConfig = {
+            ...existing,
+            enabled: enabled !== undefined ? enabled : (existing.enabled ?? true),
+            recipients: recipients || existing.recipients || ['carlosalex1974@gmail.com', 'fabi.meneghetti@gmail.com'],
+            items: items || existing.items || [1, 3, 4],
+            smtp: {
+                ...(existing.smtp || {}),
+                user: smtpUser || existing.smtp?.user || 'carlosalex1974@gmail.com',
+                pass: smtpPass !== undefined && smtpPass !== '' ? smtpPass : (existing.smtp?.pass || '')
+            }
+        };
+
+        await saveDb(db);
+        res.json({ success: true, message: 'Configurações da conferência semanal salvas com sucesso!' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/api/reports/weekly-audit/preview', async (req, res) => {
+    try {
+        const db = await readDb();
+        const recipients = db.weeklyReportConfig?.recipients || ['carlosalex1974@gmail.com', 'fabi.meneghetti@gmail.com'];
+        const data = await generateWeeklyAuditData(db, getValidAccessToken);
+        const html = buildWeeklyAuditHtml(data, recipients);
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.send(html);
+    } catch (e) {
+        res.status(500).send('<h1>Erro ao gerar prévia: ' + e.message + '</h1>');
+    }
+});
+
+app.post('/api/reports/weekly-audit/send-now', async (req, res) => {
+    try {
+        const db = await readDb();
+        const result = await sendWeeklyAuditEmail(db, getValidAccessToken, saveDb, true);
+        if (result.success) {
+            res.json({ success: true, message: 'Conferência semanal enviada com sucesso por e-mail!', messageId: result.messageId });
+        } else {
+            res.status(400).json({ success: false, error: result.error, requiresCredentials: result.requiresCredentials });
+        }
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Helper de Cron Semanal (Segunda-feira às 09:00 Horário de Brasília)
+let lastWeeklyCheckMinute = -1;
+function checkWeeklyReportSchedule(db) {
+    try {
+        const config = db.weeklyReportConfig;
+        if (!config || !config.enabled) return;
+
+        // Converter para fuso de São Paulo
+        const now = new Date();
+        const spString = now.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' });
+        const spDate = new Date(spString);
+
+        const currentDay = spDate.getDay(); // 1 = Monday
+        const currentHour = spDate.getHours();
+        const currentMinute = spDate.getMinutes();
+
+        // Evitar múltiplos disparos no mesmo minuto
+        if (currentMinute === lastWeeklyCheckMinute) return;
+        lastWeeklyCheckMinute = currentMinute;
+
+        // Verificar se é Segunda-feira às 09:00
+        const targetDay = config.dayOfWeek !== undefined ? config.dayOfWeek : 1;
+        const targetHour = config.hour !== undefined ? config.hour : 9;
+        const targetMinute = config.minute !== undefined ? config.minute : 0;
+
+        if (currentDay === targetDay && currentHour === targetHour && currentMinute === targetMinute) {
+            console.log('[CRON] ⏰ Disparando Conferência Semanal Programada (Segunda-feira 09:00)...');
+            sendWeeklyAuditEmail(db, getValidAccessToken, saveDb, false).catch(err => {
+                console.error('[CRON WEEKLY REPORT ERROR]:', err);
+            });
+        }
+    } catch (e) {
+        console.error('[CRON WEEKLY REPORT TICK ERROR]:', e);
+    }
+}
+
 app.listen(PORT, () => {
     console.log(`\n======================================================`);
     console.log(`🚀 Printou Hub - Servidor Ativo!`);
@@ -2888,6 +3006,14 @@ app.listen(PORT, () => {
             }
         });
     }, 10000);
+
+    // Checagem de agendamento de relatórios a cada 30 segundos
+    setInterval(async () => {
+        try {
+            const currentDb = await readDb();
+            checkWeeklyReportSchedule(currentDb);
+        } catch (e) {}
+    }, 30 * 1000);
 
     // Poller contínuo a cada 3 minutos
     setInterval(() => {
