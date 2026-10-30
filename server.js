@@ -749,6 +749,7 @@ app.post('/api/webhooks/:provider', async (req, res) => {
             const orderData = await orderRes.json();
             saleDate = orderData.date_closed || orderData.date_created || saleDate;
             orderId = String(orderData.id);
+            const mlPackId = orderData.pack_id ? String(orderData.pack_id) : null;
             buyer = `${orderData.buyer.first_name || ''} ${orderData.buyer.last_name || ''}`.trim() || orderData.buyer.nickname || 'Comprador ML';
             grossValue = orderData.total_amount;
             
@@ -838,8 +839,13 @@ app.post('/api/webhooks/:provider', async (req, res) => {
             saleDate = payload.date || saleDate;
         }
         
-        // Evita duplicar venda
-        const saleExists = db.sales.find(s => s.id === orderId);
+        // Evita duplicar venda (checa por ID, externalId, blingOrderId ou packId)
+        const saleExists = db.sales.find(s => 
+            s.id === orderId || 
+            s.externalId === orderId || 
+            s.blingOrderId === orderId ||
+            (typeof mlPackId !== 'undefined' && mlPackId && (s.packId === mlPackId || s.externalId === mlPackId))
+        );
         if (saleExists) {
             // Atualiza a data com hora se a venda antiga só tinha o dia YYYY-MM-DD
             if (saleExists.date && saleExists.date.length <= 10 && saleDate && saleDate.length > 10) {
@@ -915,6 +921,7 @@ app.post('/api/webhooks/:provider', async (req, res) => {
         // Registrar a venda no caixa
         const newSale = {
             id: orderId,
+            packId: typeof mlPackId !== 'undefined' ? mlPackId : undefined,
             date: saleDate,
             channelId,
             productId: product.id,
@@ -2600,7 +2607,44 @@ async function syncBlingOrdersCore() {
             else if (situacao === 'Cancelado') saleStatus = 'Cancelado';
             else if (situacao === 'Em andamento' || situacao === 'Em digitação') saleStatus = 'Pago';
 
-            const existingSale = db.sales.find(s => s.id === orderIdStr || s.externalId === externalId || s.id === externalId);
+            const isMLOrder = rawLoja === '206264816' || rawLoja === '206342497' || rawObs.includes('mercado') || rawObs.includes('meli') || rawNum.startsWith('2000') || rawNum.startsWith('MLB') || rawLoja.includes('ml');
+
+            // Busca de venda existente de forma abrangente (evitando duplicatas)
+            let existingSale = db.sales.find(s => 
+                s.id === orderIdStr || 
+                s.externalId === externalId || 
+                s.id === externalId ||
+                s.blingOrderId === orderIdStr ||
+                (s.packId && s.packId === externalId)
+            );
+
+            // Para pedidos do Mercado Livre, NUNCA criamos duplicata
+            if (isMLOrder) {
+                if (!existingSale) {
+                    existingSale = db.sales.find(s => {
+                        if (s.channelId !== 'ml1' && s.channelId !== 'ml2') return false;
+                        const d1 = new Date(s.date).getTime();
+                        const d2 = new Date(order.data).getTime();
+                        if (Math.abs(d1 - d2) > 72 * 3600 * 1000) return false;
+                        return Math.abs(s.grossValue - (parseFloat(order.total) || 0)) < 0.05;
+                    });
+                }
+
+                if (existingSale) {
+                    if (!existingSale.notes && order.contato?.nome) {
+                        existingSale.notes = `Cliente: ${order.contato.nome} | Pedido Bling: #${order.numero}`;
+                    }
+                    existingSale.blingOrderId = orderIdStr;
+                    existingSale.blingNumero = order.numero;
+                    existingSale.packId = externalId;
+                    if (existingSale.status !== saleStatus) {
+                        existingSale.status = saleStatus;
+                    }
+                    updatedCount++;
+                }
+                // Mercado Livre já é gerenciado pelo poller do ML em tempo real. Nunca duplicar!
+                continue;
+            }
 
             if (!existingSale) {
                 // Buscar detalhes dos itens do pedido no Bling para pegar o produto real
@@ -3107,9 +3151,16 @@ async function pollMercadoLivreOrders() {
 
             for (const order of data.results) {
                 const orderId = String(order.id);
+                const packIdStr = order.pack_id ? String(order.pack_id) : null;
 
-                // Pula se já existe ou se está cancelado
-                if (existingIds.has(orderId)) continue;
+                // Pula se já existe (checa por orderId, externalId, blingOrderId ou packId)
+                const alreadyExists = freshDb.sales.some(s => 
+                    s.id === orderId || 
+                    s.externalId === orderId || 
+                    s.blingOrderId === orderId ||
+                    (packIdStr && (s.packId === packIdStr || s.externalId === packIdStr))
+                );
+                if (alreadyExists) continue;
                 if (order.status === 'cancelled') continue;
 
                 // Pula se não está pago
@@ -3212,6 +3263,7 @@ async function pollMercadoLivreOrders() {
                 // Registra a venda
                 freshDb.sales.unshift({
                     id: orderId,
+                    packId: packIdStr,
                     date: order.date_closed || order.date_created || new Date().toISOString(),
                     channelId,
                     productId: product.id,
