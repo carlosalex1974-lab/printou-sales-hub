@@ -2717,26 +2717,63 @@ async function syncBlingOrdersCore() {
                     console.error("[BLING SYNC] Erro ao buscar itens do pedido:", e.message);
                 }
 
-                // Identifica ou cria o produto correto no catálogo
-                let matchedProd = db.products.find(p => 
-                    (itemSku && p.id === itemSku) ||
-                    (itemSku && p.externalIds && p.externalIds.includes(itemSku)) ||
-                    (itemDesc && p.name && p.name.toLowerCase().includes(itemDesc.slice(0, 25).toLowerCase()))
-                );
+                // Identifica o produto correto no catálogo:
+                // 1º Prioridade: SKU exato no anúncio mestre (com estoque > 0)
+                // 2º Prioridade: SKU exato (id ou externalIds)
+                // 3º Prioridade: Nome completo ou parcial
+                let matchedProd = null;
+                if (itemSku) {
+                    matchedProd = db.products.find(p =>
+                        ((p.id === itemSku) || (p.externalIds && p.externalIds.includes(itemSku))) && (p.stock > 0)
+                    ) || db.products.find(p =>
+                        (p.id === itemSku) || (p.externalIds && p.externalIds.includes(itemSku))
+                    );
+                }
+                if (!matchedProd && itemDesc) {
+                    matchedProd = db.products.find(p =>
+                        p.name && p.name.toLowerCase() === itemDesc.toLowerCase() && (p.stock > 0)
+                    ) || db.products.find(p =>
+                        p.name && p.name.toLowerCase().includes(itemDesc.slice(0, 25).toLowerCase())
+                    );
+                }
 
                 if (!matchedProd && itemDesc) {
                     const is3d = itemDesc.toLowerCase().includes('natal') || itemDesc.toLowerCase().includes('noel') || itemDesc.toLowerCase().includes('decor') || itemDesc.toLowerCase().includes('vaso');
                     matchedProd = {
                         id: itemSku || ('ITEM-' + Date.now().toString().slice(-6)),
                         name: itemDesc,
-                        type: is3d ? 'print' : 'resale',
+                        type: is3d ? '3d' : 'resale',
                         acquisitionCost: is3d ? 3.50 : 74.00,
                         price: parseFloat(order.total) || 0,
-                        stock: is3d ? 0 : 5,
+                        stock: 0,
                         alertThreshold: is3d ? 0 : 2,
                         supplierId: is3d ? 'Produção Própria 3D' : 'Bling ERP'
                     };
                     db.products.push(matchedProd);
+                }
+
+                // Baixa automática de estoque no Hub para vendas válidas (não canceladas)
+                if (matchedProd && saleStatus !== 'Cancelado') {
+                    if (matchedProd.stock !== undefined && matchedProd.stock > 0) {
+                        const oldStock = matchedProd.stock;
+                        matchedProd.stock = Math.max(0, matchedProd.stock - itemQty);
+                        if (oldStock !== matchedProd.stock) {
+                            db.integrationLogs = db.integrationLogs || [];
+                            db.integrationLogs.push({
+                                id: `log_bling_stock_${Date.now()}_${Math.random().toString().slice(-3)}`,
+                                timestamp: new Date().toLocaleTimeString('pt-BR'),
+                                type: 'info',
+                                message: `📦 [${channelId.toUpperCase()}] Estoque atualizado: -${itemQty} un de "${matchedProd.name}" (Restam ${matchedProd.stock} un).`
+                            });
+                        }
+                    }
+                    if ((matchedProd.type === '3d' || matchedProd.type === 'print') && matchedProd.weight && matchedProd.filamentId) {
+                        const totalWeight = matchedProd.weight * itemQty;
+                        const filament = db.filaments?.find(f => f.id === matchedProd.filamentId);
+                        if (filament) {
+                            filament.currentWeight = Math.max(0, parseFloat((filament.currentWeight - totalWeight).toFixed(1)));
+                        }
+                    }
                 }
 
                 const shippingVal = channelId === 'tiktok' ? 0 : (parseFloat(order.transporte?.frete) || 0);
