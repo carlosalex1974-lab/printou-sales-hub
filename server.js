@@ -2589,8 +2589,15 @@ app.get('/api/auth/bling/callback', async (req, res) => {
     }
 });
 
+let blingSyncPromise = null;
+
 // Função central de sincronização de pedidos do Bling (usada pelo Endpoint e pelo Auto-Sync)
 async function syncBlingOrdersCore() {
+    if (blingSyncPromise) {
+        console.log("[BLING SYNC] Sincronização já em andamento, aguardando conclusão...");
+        return await blingSyncPromise;
+    }
+    blingSyncPromise = (async () => {
     try {
     console.log("[BLING SYNC] Iniciando sincronização de pedidos...");
     const accessToken = await getBlingValidAccessToken();
@@ -2705,7 +2712,7 @@ async function syncBlingOrdersCore() {
                             itemQty = parseInt(firstItem.quantidade) || 1;
                         }
                     }
-                    await new Promise(r => setTimeout(r, 350));
+                    await new Promise(r => setTimeout(r, 450));
                 } catch(e) {
                     console.error("[BLING SYNC] Erro ao buscar itens do pedido:", e.message);
                 }
@@ -2788,7 +2795,11 @@ async function syncBlingOrdersCore() {
     } catch (err) {
         console.error("[BLING SYNC ERROR]:", err);
         throw err;
+    } finally {
+        blingSyncPromise = null;
     }
+    })();
+    return await blingSyncPromise;
 }
 
 // Endpoint para Sincronizar Pedidos do Bling em tempo real
