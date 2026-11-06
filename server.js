@@ -2674,16 +2674,22 @@ async function syncBlingOrdersCore() {
                 }
 
                 if (existingSale) {
+                    let mlChanged = false;
                     if (!existingSale.notes && order.contato?.nome) {
                         existingSale.notes = `Cliente: ${order.contato.nome} | Pedido Bling: #${order.numero}`;
+                        mlChanged = true;
                     }
-                    existingSale.blingOrderId = orderIdStr;
-                    existingSale.blingNumero = order.numero;
-                    existingSale.packId = externalId;
+                    if (existingSale.blingOrderId !== orderIdStr) {
+                        existingSale.blingOrderId = orderIdStr;
+                        existingSale.blingNumero = order.numero;
+                        existingSale.packId = externalId;
+                        mlChanged = true;
+                    }
                     if (existingSale.status !== saleStatus) {
                         existingSale.status = saleStatus;
+                        mlChanged = true;
                     }
-                    updatedCount++;
+                    if (mlChanged) updatedCount++;
                 }
                 // Mercado Livre já é gerenciado pelo poller do ML em tempo real. Nunca duplicar!
                 continue;
@@ -2810,15 +2816,16 @@ async function syncBlingOrdersCore() {
             }
         }
 
-        db.integrationLogs = db.integrationLogs || [];
-        db.integrationLogs.push({
-            id: Date.now().toString(),
-            date: new Date().toISOString(),
-            type: 'info',
-            message: `Sincronização do Bling concluída: ${newSalesCount} novas vendas importadas, ${updatedCount} atualizadas (Total de ${orders.length} pedidos no Bling).`
-        });
-
-        await saveDb(db);
+        if (newSalesCount > 0 || updatedCount > 0) {
+            db.integrationLogs = db.integrationLogs || [];
+            db.integrationLogs.push({
+                id: Date.now().toString(),
+                date: new Date().toISOString(),
+                type: 'info',
+                message: `Sincronização do Bling concluída: ${newSalesCount} novas vendas importadas, ${updatedCount} atualizadas (Total de ${orders.length} pedidos no Bling).`
+            });
+            await saveDb(db);
+        }
         console.log(`[BLING SYNC] Concluído! ${newSalesCount} novas vendas adicionadas.`);
 
         
