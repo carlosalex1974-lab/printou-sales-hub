@@ -2787,7 +2787,21 @@ async function syncBlingOrdersCore() {
                 const newSale = {
                     id: orderIdStr,
                     externalId: externalId,
-                    date: order.data ? new Date(String(order.data).length === 10 ? order.data + 'T12:00:00-03:00' : order.data).toISOString() : new Date().toISOString(),
+                    date: (() => {
+                        const now = new Date();
+                        if (!order.data) return now.toISOString();
+                        const rawDateStr = String(order.data).trim();
+                        if (rawDateStr.length > 10) return new Date(rawDateStr).toISOString();
+                        // Data no formato YYYY-MM-DD vinda do Bling (que não envia hora/minuto):
+                        // Se for do dia de hoje no fuso de Brasília, usa o horário real exato da sincronização!
+                        const todayBrt = now.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+                        if (rawDateStr === todayBrt) {
+                            return now.toISOString();
+                        }
+                        // Se for de um dia anterior sincronizado retroativamente, preserva o horário atual no dia do pedido
+                        const timeBrt = now.toLocaleTimeString('en-GB', { timeZone: 'America/Sao_Paulo', hour12: false });
+                        return new Date(`${rawDateStr}T${timeBrt}-03:00`).toISOString();
+                    })(),
                     channelId: channelId,
                     productId: matchedProd ? matchedProd.id : ((db.products && db.products.length > 0) ? db.products[0].id : 'bling_item'),
                     quantity: itemQty,
