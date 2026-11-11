@@ -2352,9 +2352,9 @@ async function sanitizeMongoSalesOnStartup() {
             const prod = freshDb.products?.find(p => p.id === s.productId || (p.externalIds && p.externalIds.includes(s.productId)));
             const chan = freshDb.channels?.find(c => c.id === s.channelId);
 
-            if (s.channelId === 'direta') {
-                if (s.shipping === '20.75' || s.shipping === 20.75 || s.shipping === '19.90' || s.shipping === 19.90) {
-                    s.shipping = '0.00';
+            if (s.channelId === 'direta' || s.channelId === 'tiktok') {
+                if (s.shipping === '20.75' || s.shipping === 20.75 || s.shipping === '21.15' || s.shipping === 21.15 || s.shipping === '19.90' || s.shipping === 19.90 || (s.channelId === 'tiktok' && parseFloat(s.shipping) > 0)) {
+                    s.shipping = s.channelId === 'tiktok' ? 0 : '0.00';
                     updated = true;
                 }
             } else {
@@ -2696,26 +2696,45 @@ async function syncBlingOrdersCore() {
             }
 
             if (!existingSale) {
-                // Buscar detalhes dos itens do pedido no Bling para pegar o produto real
+                // Buscar detalhes dos itens do pedido no Bling para pegar todos os produtos e a quantidade total real
                 let itemDesc = '';
                 let itemSku = '';
                 let itemQty = 1;
+                let orderItems = [];
 
                 try {
-                    const detailRes = await fetch(`https://api.bling.com.br/Api/v3/pedidos/vendas/${orderIdStr}`, {
+                    let detailRes = await fetch(`https://api.bling.com.br/Api/v3/pedidos/vendas/${orderIdStr}`, {
                         method: 'GET',
                         headers: {
                             'Authorization': `Bearer ${accessToken}`,
                             'Accept': 'application/json'
                         }
                     });
+                    if (detailRes.status === 429) {
+                        await new Promise(r => setTimeout(r, 1200));
+                        detailRes = await fetch(`https://api.bling.com.br/Api/v3/pedidos/vendas/${orderIdStr}`, {
+                            method: 'GET',
+                            headers: {
+                                'Authorization': `Bearer ${accessToken}`,
+                                'Accept': 'application/json'
+                            }
+                        });
+                    }
                     if (detailRes.ok) {
                         const detailData = await detailRes.json();
-                        const firstItem = detailData.data?.itens?.[0];
-                        if (firstItem) {
-                            itemDesc = firstItem.descricao || '';
+                        orderItems = Array.isArray(detailData.data?.itens) ? detailData.data.itens : [];
+                        if (orderItems.length > 0) {
+                            const firstItem = orderItems[0];
                             itemSku = String(firstItem.codigo || '').trim();
-                            itemQty = parseInt(firstItem.quantidade) || 1;
+                            itemQty = orderItems.reduce((sum, it) => sum + (parseInt(it.quantidade) || 1), 0) || 1;
+                            if (orderItems.length === 1) {
+                                itemDesc = firstItem.descricao || '';
+                            } else {
+                                itemDesc = orderItems.map(it => {
+                                    const q = parseInt(it.quantidade) || 1;
+                                    return q > 1 ? `${q}x ${it.descricao || it.codigo}` : (it.descricao || it.codigo);
+                                }).join(' + ');
+                            }
                         }
                     }
                     await new Promise(r => setTimeout(r, 450));
@@ -2723,34 +2742,37 @@ async function syncBlingOrdersCore() {
                     console.error("[BLING SYNC] Erro ao buscar itens do pedido:", e.message);
                 }
 
-                // Identifica o produto correto no catálogo:
-                // 1º Prioridade: SKU exato no anúncio mestre (com estoque > 0)
-                // 2º Prioridade: SKU exato (id ou externalIds)
-                // 3º Prioridade: Nome completo ou parcial
-                let matchedProd = null;
-                if (itemSku) {
-                    matchedProd = db.products.find(p =>
-                        ((p.id === itemSku) || (p.externalIds && p.externalIds.includes(itemSku))) && (p.stock > 0)
-                    ) || db.products.find(p =>
-                        (p.id === itemSku) || (p.externalIds && p.externalIds.includes(itemSku))
-                    );
-                }
-                if (!matchedProd && itemDesc) {
-                    matchedProd = db.products.find(p =>
-                        p.name && p.name.toLowerCase() === itemDesc.toLowerCase() && (p.stock > 0)
-                    ) || db.products.find(p =>
-                        p.name && p.name.toLowerCase().includes(itemDesc.slice(0, 25).toLowerCase())
-                    );
-                }
+                // Helper para localizar produto no catálogo por SKU ou Descrição
+                const resolveCatalogProduct = (sku, desc) => {
+                    let found = null;
+                    if (sku) {
+                        found = db.products.find(p =>
+                            ((p.id === sku) || (p.externalIds && p.externalIds.includes(sku))) && (p.stock > 0)
+                        ) || db.products.find(p =>
+                            (p.id === sku) || (p.externalIds && p.externalIds.includes(sku))
+                        );
+                    }
+                    if (!found && desc) {
+                        found = db.products.find(p =>
+                            p.name && p.name.toLowerCase() === desc.toLowerCase() && (p.stock > 0)
+                        ) || db.products.find(p =>
+                            p.name && p.name.toLowerCase().includes(desc.slice(0, 25).toLowerCase())
+                        );
+                    }
+                    return found;
+                };
 
-                if (!matchedProd && itemDesc) {
-                    const is3d = itemDesc.toLowerCase().includes('natal') || itemDesc.toLowerCase().includes('noel') || itemDesc.toLowerCase().includes('decor') || itemDesc.toLowerCase().includes('vaso');
+                let matchedProd = resolveCatalogProduct(itemSku, orderItems[0]?.descricao || itemDesc);
+
+                if (!matchedProd && (orderItems[0]?.descricao || itemDesc)) {
+                    const baseDesc = orderItems[0]?.descricao || itemDesc;
+                    const is3d = baseDesc.toLowerCase().includes('natal') || baseDesc.toLowerCase().includes('noel') || baseDesc.toLowerCase().includes('decor') || baseDesc.toLowerCase().includes('vaso');
                     matchedProd = {
                         id: itemSku || ('ITEM-' + Date.now().toString().slice(-6)),
-                        name: itemDesc,
+                        name: baseDesc,
                         type: is3d ? '3d' : 'resale',
                         acquisitionCost: is3d ? 3.50 : 74.00,
-                        price: parseFloat(order.total) || 0,
+                        price: (parseFloat(order.total) || 0) / (itemQty || 1),
                         stock: 0,
                         alertThreshold: is3d ? 0 : 2,
                         supplierId: is3d ? 'Produção Própria 3D' : 'Bling ERP'
@@ -2758,26 +2780,39 @@ async function syncBlingOrdersCore() {
                     db.products.push(matchedProd);
                 }
 
-                // Baixa automática de estoque no Hub para vendas válidas (não canceladas)
-                if (matchedProd && saleStatus !== 'Cancelado') {
-                    if (matchedProd.stock !== undefined && matchedProd.stock > 0) {
-                        const oldStock = matchedProd.stock;
-                        matchedProd.stock = Math.max(0, matchedProd.stock - itemQty);
-                        if (oldStock !== matchedProd.stock) {
-                            db.integrationLogs = db.integrationLogs || [];
-                            db.integrationLogs.push({
-                                id: `log_bling_stock_${Date.now()}_${Math.random().toString().slice(-3)}`,
-                                timestamp: new Date().toLocaleTimeString('pt-BR'),
-                                type: 'info',
-                                message: `📦 [${channelId.toUpperCase()}] Estoque atualizado: -${itemQty} un de "${matchedProd.name}" (Restam ${matchedProd.stock} un).`
-                            });
+                // Baixa automática de estoque no Hub para CADA item do pedido (vendas válidas não canceladas)
+                if (saleStatus !== 'Cancelado') {
+                    const itemsToDeduct = orderItems.length > 0
+                        ? orderItems.map(it => ({
+                            prod: resolveCatalogProduct(String(it.codigo || '').trim(), it.descricao || '') || matchedProd,
+                            qty: parseInt(it.quantidade) || 1
+                        }))
+                        : [{ prod: matchedProd, qty: itemQty }];
+
+                    for (const entry of itemsToDeduct) {
+                        const targetProd = entry.prod;
+                        const deductQty = entry.qty;
+                        if (!targetProd) continue;
+
+                        if (targetProd.stock !== undefined && targetProd.stock > 0) {
+                            const oldStock = targetProd.stock;
+                            targetProd.stock = Math.max(0, targetProd.stock - deductQty);
+                            if (oldStock !== targetProd.stock) {
+                                db.integrationLogs = db.integrationLogs || [];
+                                db.integrationLogs.push({
+                                    id: `log_bling_stock_${Date.now()}_${Math.random().toString().slice(-3)}`,
+                                    timestamp: new Date().toLocaleTimeString('pt-BR'),
+                                    type: 'info',
+                                    message: `📦 [${channelId.toUpperCase()}] Estoque atualizado: -${deductQty} un de "${targetProd.name}" (Restam ${targetProd.stock} un).`
+                                });
+                            }
                         }
-                    }
-                    if ((matchedProd.type === '3d' || matchedProd.type === 'print') && matchedProd.weight && matchedProd.filamentId) {
-                        const totalWeight = matchedProd.weight * itemQty;
-                        const filament = db.filaments?.find(f => f.id === matchedProd.filamentId);
-                        if (filament) {
-                            filament.currentWeight = Math.max(0, parseFloat((filament.currentWeight - totalWeight).toFixed(1)));
+                        if ((targetProd.type === '3d' || targetProd.type === 'print') && targetProd.weight && targetProd.filamentId) {
+                            const totalWeight = targetProd.weight * deductQty;
+                            const filament = db.filaments?.find(f => f.id === targetProd.filamentId);
+                            if (filament) {
+                                filament.currentWeight = Math.max(0, parseFloat((filament.currentWeight - totalWeight).toFixed(1)));
+                            }
                         }
                     }
                 }
@@ -2823,7 +2858,7 @@ async function syncBlingOrdersCore() {
                     existingSale.channelId = channelId;
                     updatedCount++;
                 }
-                if (channelId === 'tiktok' && (existingSale.shipping === '21.15' || existingSale.shipping === 21.15)) {
+                if (channelId === 'tiktok' && parseFloat(existingSale.shipping) > 0) {
                     existingSale.shipping = 0;
                     updatedCount++;
                 }
