@@ -2818,6 +2818,8 @@ async function syncBlingOrdersCore() {
                 }
 
                 const shippingVal = channelId === 'tiktok' ? 0 : (parseFloat(order.transporte?.frete) || 0);
+                const isFilamentOrder = (matchedProd && matchedProd.type === 'resale') ||
+                    /filamento|\bpla\b|petg|\babs\b|\btpu\b|\basa\b|elegoo|fusionx|soleyin/i.test(`${itemDesc || ''} ${matchedProd?.name || ''}`);
 
                 const newSale = {
                     id: orderIdStr,
@@ -2843,6 +2845,8 @@ async function syncBlingOrdersCore() {
                     grossValue: parseFloat(order.total) || 0,
                     discount: parseFloat(order.desconto?.valor) || 0,
                     shipping: shippingVal,
+                    isAffiliate: channelId === 'tiktok' ? isFilamentOrder : false,
+                    affiliateRate: (channelId === 'tiktok' && isFilamentOrder) ? 8 : 0,
                     status: saleStatus,
                     notes: `Cliente: ${order.contato?.nome || 'Cliente Bling'} | Item: ${itemDesc || 'Item Bling'} | Pedido Bling: #${order.numero}`
                 };

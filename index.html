@@ -825,6 +825,12 @@
                 
                 let shipping = 0;
                 const isTiktok = sale.channelId === 'tiktok' || (chan && chan.name && chan.name.toLowerCase().includes('tiktok'));
+                const isFilamentSale = (prod && prod.type === 'resale') || /filamento|\bpla\b|petg|\babs\b|\btpu\b|\basa\b|elegoo|fusionx|soleyin/i.test(`${prod?.name || ''} ${sale?.notes || ''}`);
+                const hasAffiliate = isTiktok ? (sale.isAffiliate !== undefined ? Boolean(sale.isAffiliate) : isFilamentSale) : Boolean(sale.isAffiliate);
+                const affiliateRate = hasAffiliate ? (sale.affiliateRate !== undefined && sale.affiliateRate !== '' && !isNaN(parseFloat(sale.affiliateRate)) ? parseFloat(sale.affiliateRate) : 8) : 0;
+                const affiliateFee = hasAffiliate ? (sale.grossValue * (affiliateRate / 100)) : 0;
+                const platformFee = fee;
+                fee = platformFee + affiliateFee;
                 if (sale.channelId === 'direta' || isTiktok) {
                     // Venda Direta / Pix / TikTok Shop: Usa estritamente o frete informado na venda (padrão R$ 0,00)
                     shipping = (sale.shipping !== undefined && sale.shipping !== null && sale.shipping !== '' && !isNaN(parseFloat(sale.shipping)))
@@ -865,6 +871,10 @@
                 return {
                     productCost: safeCost,
                     fees: safeFee,
+                    platformFee: isNaN(platformFee) ? 0 : platformFee,
+                    affiliateFee: isNaN(affiliateFee) ? 0 : affiliateFee,
+                    affiliateRate: affiliateRate,
+                    hasAffiliate: hasAffiliate,
                     netProfit: isNaN(netProfit) ? 0 : netProfit,
                     shippingApplied: safeShipping
                 };
@@ -2663,6 +2673,8 @@
                     quantity: parseInt(editingSale.quantity) || 1,
                     grossValue: parseFloat(editingSale.grossValue) || 0,
                     shipping: parseFloat(editingSale.shipping) || 0,
+                    isAffiliate: Boolean(editingSale.isAffiliate),
+                    affiliateRate: editingSale.isAffiliate ? (parseFloat(editingSale.affiliateRate) || 8) : 0,
                     status: editingSale.status
                 };
 
@@ -2984,7 +2996,27 @@
                                             </td>
                                             <td className="py-4 text-center font-bold">{sale.quantity}</td>
                                             <td className="py-4 text-right font-bold text-white">R$ {sale.grossValue.toFixed(2)}</td>
-                                            <td className="py-4 text-right text-rose-400">R$ {fin.fees.toFixed(2)}</td>
+                                            <td className="py-4 text-right text-rose-400">
+                                                <div className="flex flex-col items-end">
+                                                    <span>R$ {fin.fees.toFixed(2)}</span>
+                                                    {sale.channelId === 'tiktok' && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                if (isClosed(sale.date)) return alert("Mês fechado - alterações bloqueadas.");
+                                                                const nextAff = !fin.hasAffiliate;
+                                                                const updated = { ...sale, isAffiliate: nextAff, affiliateRate: nextAff ? 8 : 0 };
+                                                                mutateServer('sales', 'update', updated, sale.id);
+                                                                setSales(sales.map(s => s.id === sale.id ? updated : s));
+                                                            }}
+                                                            className={`mt-0.5 text-[10px] px-1.5 py-0.5 rounded font-extrabold transition-all ${fin.hasAffiliate ? 'bg-pink-500/20 text-pink-300 border border-pink-500/40 hover:bg-pink-500/30' : 'bg-white/5 text-gray-500 hover:text-gray-300'}`}
+                                                            title={fin.hasAffiliate ? `Comissão Afiliado TikTok (${fin.affiliateRate}% = R$ ${fin.affiliateFee.toFixed(2)}) incluída. Clique para remover.` : 'Venda sem afiliado (5%). Clique para aplicar 8% de comissão de afiliado.'}
+                                                        >
+                                                            {fin.hasAffiliate ? `🤝 +${fin.affiliateRate}% Afil. (R$ ${fin.affiliateFee.toFixed(2)})` : '+ Afiliado 8%'}
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
                                             <td className="py-4 text-right text-amber-400 font-semibold">
                                                 <button 
                                                     type="button"
