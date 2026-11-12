@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" class="boss">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Printou Sales Hub - Controle de Vendas</title>
     <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
@@ -234,6 +234,231 @@
         html.light ::-webkit-scrollbar-track {
             background: #F3F4F6;
         }
+
+        /* ==========================================================================
+           TEMA BOSS HUB (Cyber-Emerald #00FF88 & Obsidian)
+           Inspirado em https://hub.ferramentasboss.com.br/
+           ========================================================================== */
+        :root {
+            --boss-green: #00FF88;
+            --boss-green-glow: rgba(0, 255, 136, 0.35);
+            --boss-green-dim: rgba(0, 255, 136, 0.10);
+            --boss-bg-0: #050507;
+            --boss-bg-1: #0d0d12;
+            --boss-bg-2: #14141d;
+            --boss-border: #1f1f28;
+            --boss-border-strong: #2a2a38;
+            --boss-text: #e8e8ee;
+            --boss-text-2: #8a8a99;
+            --boss-text-3: #4a4a5e;
+            --boss-danger: #ff5577;
+        }
+
+        @keyframes bossPulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50%      { opacity: 0.55; transform: scale(0.85); }
+        }
+
+        .boss-status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10.5px;
+            color: var(--boss-green);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: rgba(0, 255, 136, 0.06);
+            border: 1px solid rgba(0, 255, 136, 0.2);
+        }
+
+        .boss-status-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--boss-green);
+            box-shadow: 0 0 8px var(--boss-green);
+            animation: bossPulse 1.6s ease-in-out infinite;
+        }
+
+        html.boss,
+        html.boss body {
+            background-color: var(--boss-bg-0) !important;
+            color: var(--boss-text) !important;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Grid Cyber 56x56 de fundo */
+        html.boss body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(0, 255, 136, 0.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 136, 0.04) 1px, transparent 1px);
+            background-size: 56px 56px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* Feixes de luz radial nos cantos */
+        html.boss body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse 60% 80% at 20% 100%, rgba(0, 255, 136, 0.10), transparent 60%),
+                radial-gradient(ellipse 60% 80% at 100% 0%, rgba(0, 255, 136, 0.05), transparent 60%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        html.boss #root {
+            position: relative;
+            z-index: 1;
+        }
+
+        html.boss .bg-brand-darkBg {
+            background-color: transparent !important;
+        }
+
+        /* Painéis e Cards com gradiente obsidian e filete neon superior */
+        html.boss .glass-panel {
+            position: relative;
+            background: linear-gradient(180deg, rgba(13, 13, 18, 0.94) 0%, rgba(20, 20, 29, 0.94) 100%) !important;
+            border: 1px solid var(--boss-border-strong) !important;
+            box-shadow:
+                0 0 0 1px rgba(0, 255, 136, 0.04),
+                0 24px 60px rgba(0, 0, 0, 0.55) !important;
+            backdrop-filter: blur(16px);
+        }
+
+        html.boss .glass-panel::before {
+            content: '';
+            position: absolute;
+            top: -1px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 180px;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--boss-green), transparent);
+            border-radius: 999px;
+            pointer-events: none;
+        }
+
+        html.boss aside.glass-panel::before {
+            top: 0;
+            left: 50%;
+            width: 120px;
+        }
+
+        html.boss .glass-card {
+            background: linear-gradient(180deg, var(--boss-bg-1) 0%, var(--boss-bg-2) 100%) !important;
+            border: 1px solid var(--boss-border) !important;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35) !important;
+        }
+
+        html.boss .glass-card:hover {
+            border-color: rgba(0, 255, 136, 0.45) !important;
+            box-shadow: 0 0 24px rgba(0, 255, 136, 0.14) !important;
+            transform: translateY(-2px);
+        }
+
+        /* Botões e Gradientes em Verde Neon #00FF88 */
+        html.boss .btn-gradient {
+            background: var(--boss-green) !important;
+            color: #050507 !important;
+            font-weight: 700 !important;
+            letter-spacing: 0.3px;
+            box-shadow: 0 0 0 0 var(--boss-green-glow);
+            transition: filter 0.15s, transform 0.1s, box-shadow 0.2s !important;
+        }
+
+        html.boss .btn-gradient:hover:not(:disabled) {
+            filter: brightness(1.08);
+            box-shadow: 0 0 28px var(--boss-green-glow) !important;
+            transform: translateY(-1px);
+        }
+
+        html.boss .text-gradient {
+            background: linear-gradient(135deg, #00FF88 0%, #14B8A6 100%) !important;
+            -webkit-background-clip: text !important;
+            -webkit-text-fill-color: transparent !important;
+        }
+
+        /* Substituição das cores de destaque roxo para #00FF88 no tema BOSS */
+        html.boss .text-brand-orange {
+            color: var(--boss-green) !important;
+        }
+
+        html.boss .border-brand-orange {
+            border-color: var(--boss-green) !important;
+        }
+
+        html.boss .border-brand-orange\/30,
+        html.boss .border-brand-orange\/40 {
+            border-color: rgba(0, 255, 136, 0.32) !important;
+        }
+
+        html.boss .bg-brand-orange\/10 {
+            background-color: rgba(0, 255, 136, 0.10) !important;
+        }
+
+        html.boss .bg-brand-orange\/20 {
+            background-color: rgba(0, 255, 136, 0.16) !important;
+        }
+
+        html.boss .hover\:bg-brand-orange:hover {
+            background-color: var(--boss-green) !important;
+            color: #050507 !important;
+        }
+
+        html.boss .from-brand-orange\/20 {
+            --tw-gradient-from: rgba(0, 255, 136, 0.16) !important;
+        }
+
+        /* Inputs, Selects e Textareas estilo BOSS Hub */
+        html.boss input:not([type="checkbox"]):not([type="radio"]),
+        html.boss select,
+        html.boss textarea {
+            background-color: var(--boss-bg-0) !important;
+            border: 1px solid var(--boss-border) !important;
+            color: var(--boss-text) !important;
+            border-radius: 8px !important;
+            transition: border-color 0.15s, box-shadow 0.15s, background 0.15s !important;
+        }
+
+        html.boss input:not([type="checkbox"]):not([type="radio"]):focus,
+        html.boss select:focus,
+        html.boss textarea:focus {
+            border-color: var(--boss-green) !important;
+            background-color: var(--boss-bg-1) !important;
+            box-shadow: 0 0 0 3px var(--boss-green-dim) !important;
+        }
+
+        /* Rótulos e Cabeçalhos Técnicos em JetBrains Mono */
+        html.boss label,
+        html.boss th,
+        html.boss .tracking-widest {
+            font-family: 'JetBrains Mono', monospace !important;
+            letter-spacing: 1.5px !important;
+        }
+
+        /* Scrollbar Neon */
+        html.boss ::-webkit-scrollbar-track {
+            background: var(--boss-bg-0);
+        }
+        html.boss ::-webkit-scrollbar-thumb {
+            background: rgba(0, 255, 136, 0.28);
+            border-radius: 3px;
+        }
+        html.boss ::-webkit-scrollbar-thumb:hover {
+            background: var(--boss-green);
+        }
+
     </style>
     <!-- Chart.js CDN para Gráficos Interativos -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -457,15 +682,19 @@
             });
             const [isSidebarOpen, setIsSidebarOpen] = useState(false);
             const [theme, setTheme] = useState(() => {
-                return localStorage.getItem('printou_theme') || 'light';
+                const saved = localStorage.getItem('printou_theme_v2');
+                return saved || 'boss';
             });
 
             useEffect(() => {
-                localStorage.setItem('printou_theme', theme);
+                localStorage.setItem('printou_theme_v2', theme);
+                document.documentElement.classList.remove('light', 'boss', 'dark');
                 if (theme === 'light') {
                     document.documentElement.classList.add('light');
+                } else if (theme === 'boss') {
+                    document.documentElement.classList.add('boss');
                 } else {
-                    document.documentElement.classList.remove('light');
+                    document.documentElement.classList.add('dark');
                 }
             }, [theme]);
 
@@ -1188,7 +1417,13 @@
                                     <i data-lucide="menu" className="w-5 h-5"></i>
                                 </button>
                                 <div>
-                                    <span className="text-xs font-bold tracking-widest text-brand-orange uppercase">Operações</span>
+                                    <div className="flex items-center gap-3 mb-1">
+                                        <span className="text-xs font-bold tracking-widest text-brand-orange uppercase">Operações</span>
+                                        <span className="boss-status-pill">
+                                            <span className="boss-status-dot"></span>
+                                            HUB ONLINE
+                                        </span>
+                                    </div>
                                     <h2 className="text-2xl lg:text-3xl font-extrabold text-white">Controle Central de Vendas</h2>
                                 </div>
                             </div>
@@ -1210,11 +1445,12 @@
                                 </select>
 
                                 <button 
-                                    onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-                                    className="bg-white/5 border border-brand-orange/30 text-white p-3 rounded-xl hover:bg-brand-orange/10 flex items-center justify-center transition-all"
-                                    title="Alternar Tema Claro/Escuro"
+                                    onClick={() => setTheme(theme === 'boss' ? 'dark' : theme === 'dark' ? 'light' : 'boss')}
+                                    className="bg-white/5 border border-brand-orange/30 text-white px-3.5 py-2.5 rounded-xl hover:bg-brand-orange/10 flex items-center gap-2 justify-center transition-all text-xs font-bold"
+                                    title="Alternar entre Tema BOSS (Neon), Escuro Clássico e Modo Claro"
                                 >
-                                    <i data-lucide={theme === 'light' ? "moon" : "sun"} className="w-5 h-5"></i>
+                                    <span className={theme === 'boss' ? 'boss-status-dot' : 'hidden'}></span>
+                                    <span>{theme === 'boss' ? '⚡ Tema BOSS' : theme === 'dark' ? '🌙 Tema Roxo' : '☀️ Tema Claro'}</span>
                                 </button>
 
                                 <button 
@@ -4980,6 +5216,12 @@
                             <div>
                                 <h2 className="text-2xl font-black text-white">Acesso Restrito</h2>
                                 <p className="text-xs text-gray-400 mt-1 uppercase tracking-widest">Printou Sales Hub</p>
+                                <div className="mt-3 flex justify-center">
+                                    <span className="boss-status-pill">
+                                        <span className="boss-status-dot"></span>
+                                        SISTEMA ATIVO
+                                    </span>
+                                </div>
                             </div>
                         </div>
 
