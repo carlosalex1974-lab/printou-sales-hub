@@ -2816,6 +2816,22 @@ async function syncBlingOrdersCore() {
                                     type: 'info',
                                     message: `📦 [${channelId.toUpperCase()}] Estoque atualizado: -${deductQty} un de "${targetProd.name}" (Restam ${targetProd.stock} un).`
                                 });
+                                // Propaga a baixa do TikTok/Bling diretamente para os anúncios gêmeos ativos no Mercado Livre
+                                try {
+                                    const mlTokenForDeduct = await getValidAccessToken('mercadolivre', db);
+                                    if (mlTokenForDeduct) {
+                                        const mlbIdsToUpdate = Array.from(new Set([targetProd.id, targetProd.sku, ...(targetProd.externalIds || [])].filter(id => String(id || '').startsWith('MLB'))));
+                                        for (const mlbId of mlbIdsToUpdate) {
+                                            await fetch(`https://api.mercadolibre.com/items/${mlbId}`, {
+                                                method: 'PUT',
+                                                headers: { 'Authorization': `Bearer ${mlTokenForDeduct}`, 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ available_quantity: targetProd.stock })
+                                            });
+                                        }
+                                    }
+                                } catch (mlPushErr) {
+                                    console.error("[ML PUSH STOCK] Erro ao atualizar estoque no ML após venda Bling/TikTok:", mlPushErr.message);
+                                }
                             }
                         }
                         if ((targetProd.type === '3d' || targetProd.type === 'print') && targetProd.weight && targetProd.filamentId) {
@@ -2880,62 +2896,55 @@ async function syncBlingOrdersCore() {
             }
         }
 
-        // Sincronizar saldo real de estoque (estoque.saldoVirtualTotal) diretamente do Bling ERP
-        // Executa sempre que houver nova venda/atualização ou a cada 10 minutos
+        // Sincronizar saldo real de estoque de filamentos tendo o MERCADO LIVRE como fonte da verdade
         let stockSyncedCount = 0;
-        if (newSalesCount > 0 || updatedCount > 0 || !global.lastBlingStockSyncAt || (Date.now() - global.lastBlingStockSyncAt > 10 * 60 * 1000)) {
+        if (!global.lastMlStockSyncAt || (Date.now() - global.lastMlStockSyncAt > 10 * 60 * 1000)) {
             try {
-                let allBlingProds = [];
-                let bPage = 1;
-                while (bPage <= 12) {
-                    const pRes = await fetch(`https://api.bling.com.br/Api/v3/produtos?pagina=${bPage}&limite=100`, {
-                        headers: { 'Authorization': `Bearer ${accessToken}`, 'Accept': 'application/json' }
-                    });
-                    if (!pRes.ok) break;
-                    const pData = await pRes.json();
-                    const pList = pData.data || [];
-                    allBlingProds.push(...pList);
-                    if (pList.length < 100) break;
-                    bPage++;
-                    await new Promise(r => setTimeout(r, 380));
-                }
-                if (allBlingProds.length > 0) {
-                    const blingStockMap = new Map();
-                    for (const bp of allBlingProds) {
-                        const sku = String(bp.codigo || '').trim();
-                        if (!sku) continue;
-                        const st = Math.max(0, parseInt(bp.estoque?.saldoVirtualTotal) || 0);
-                        if (!blingStockMap.has(sku) || st > blingStockMap.get(sku)) {
-                            blingStockMap.set(sku, st);
+                const mlToken = await getValidAccessToken('mercadolivre', db);
+                if (mlToken) {
+                    const allMlbIds = new Set();
+                    const isFilRoll = (name) => /filamento|refil|refill|fios pla|elegoo|fusionx|soleyin|bambu lab|bamboo lab|polymaker|sunlu|kexcelled|creality cr-petg|cr-petg|cr petg/i.test(name || '');
+                    for (const p of (db.products || [])) {
+                        if (!isFilRoll(p.name)) continue;
+                        [p.id, p.sku, ...(p.externalIds || [])].forEach(id => {
+                            if (String(id || '').startsWith('MLB')) allMlbIds.add(String(id).trim());
+                        });
+                    }
+                    const idArr = Array.from(allMlbIds);
+                    const mlMap = new Map();
+                    for (let i = 0; i < idArr.length; i += 20) {
+                        const batch = idArr.slice(i, i + 20);
+                        const r = await fetch(`https://api.mercadolibre.com/items?ids=${batch.join(',')}`, {
+                            headers: { 'Authorization': `Bearer ${mlToken}` }
+                        });
+                        if (r.ok) {
+                            const d = await r.json();
+                            for (const x of d) {
+                                if (x.code === 200 && x.body) mlMap.set(x.body.id, x.body);
+                            }
                         }
                     }
                     for (const hp of (db.products || [])) {
-                        const candidateSkus = [hp.id, hp.sku, ...(hp.externalIds || [])].filter(Boolean).map(x => String(x).trim());
-                        let matchedSt = null;
-                        for (const cSku of candidateSkus) {
-                            if (blingStockMap.has(cSku)) {
-                                matchedSt = blingStockMap.get(cSku);
-                                break;
-                            }
+                        if (!isFilRoll(hp.name)) {
+                            if (hp.stock === undefined || hp.stock === null) { hp.stock = 0; stockSyncedCount++; }
+                            continue;
                         }
-                        if (matchedSt !== null && hp.stock !== matchedSt) {
-                            hp.stock = matchedSt;
-                            stockSyncedCount++;
-                        } else if (hp.stock === undefined || hp.stock === null) {
-                            hp.stock = 0;
+                        const cIds = [hp.id, hp.sku, ...(hp.externalIds || [])].filter(id => String(id || '').startsWith('MLB'));
+                        const activeMatches = cIds.map(id => mlMap.get(id)).filter(it => it && it.status === 'active');
+                        const targetSt = activeMatches.length > 0
+                            ? Math.min(...activeMatches.map(it => parseInt(it.available_quantity) || 0))
+                            : (cIds.some(id => mlMap.has(id)) ? 0 : hp.stock || 0);
+                        if (hp.stock !== targetSt) {
+                            hp.stock = targetSt;
                             stockSyncedCount++;
                         }
                     }
-                    global.lastBlingStockSyncAt = Date.now();
-                    if (stockSyncedCount > 0) {
-                        console.log(`[BLING STOCK SYNC] ${stockSyncedCount} produto(s) tiveram estoque alinhado com o Bling ERP.`);
-                    }
+                    global.lastMlStockSyncAt = Date.now();
                 }
             } catch (stockErr) {
-                console.error("[BLING STOCK SYNC] Erro ao sincronizar estoque do Bling:", stockErr.message);
+                console.error("[ML STOCK SYNC] Erro ao alinhar estoque pelo Mercado Livre:", stockErr.message);
             }
         }
-
         if (newSalesCount > 0 || updatedCount > 0 || stockSyncedCount > 0) {
             db.integrationLogs = db.integrationLogs || [];
             if (newSalesCount > 0 || updatedCount > 0) {
@@ -3627,51 +3636,68 @@ async function runSystemGuardianAudit() {
             details.push('⚠️ Token do Bling ERP não pôde ser validado.');
         }
 
-        // 2. Auditar e Alinhar Estoque Bling ERP (saldoVirtualTotal) ↔ Hub (db.products)
-        let allBlingProds = [];
-        if (blingToken) {
-            let bPage = 1;
-            while (bPage <= 12) {
-                const pRes = await fetch(`https://api.bling.com.br/Api/v3/produtos?pagina=${bPage}&limite=100`, {
-                    headers: { 'Authorization': `Bearer ${blingToken}`, 'Accept': 'application/json' }
-                });
-                if (!pRes.ok) break;
-                const pData = await pRes.json();
-                const pList = pData.data || [];
-                allBlingProds.push(...pList);
-                if (pList.length < 100) break;
-                bPage++;
-                await new Promise(r => setTimeout(r, 350));
-            }
+        // 2. Auditar e Alinhar Estoque tendo o MERCADO LIVRE como Fonte da Verdade (e equalizar gêmeos no ML)
+        const isFilRoll = (name) => /filamento|refil|refill|fios pla|elegoo|fusionx|soleyin|bambu lab|bamboo lab|polymaker|sunlu|kexcelled|creality cr-petg|cr-petg|cr petg/i.test(name || '');
+        const allMlbIds = new Set();
+        for (const p of (db.products || [])) {
+            if (!isFilRoll(p.name)) continue;
+            [p.id, p.sku, ...(p.externalIds || [])].forEach(id => {
+                if (String(id || '').startsWith('MLB')) allMlbIds.add(String(id).trim());
+            });
         }
 
-        if (allBlingProds.length > 0) {
-            const blingStockMap = new Map();
-            for (const bp of allBlingProds) {
-                const sku = String(bp.codigo || '').trim();
-                if (!sku) continue;
-                const st = Math.max(0, parseInt(bp.estoque?.saldoVirtualTotal) || 0);
-                if (!blingStockMap.has(sku) || st > blingStockMap.get(sku)) {
-                    blingStockMap.set(sku, st);
+        const idArr = Array.from(allMlbIds);
+        const mlMap = new Map();
+        if (mlToken && idArr.length > 0) {
+            for (let i = 0; i < idArr.length; i += 20) {
+                const batch = idArr.slice(i, i + 20);
+                const r = await fetch(`https://api.mercadolibre.com/items?ids=${batch.join(',')}`, {
+                    headers: { 'Authorization': `Bearer ${mlToken}` }
+                });
+                if (r.ok) {
+                    const d = await r.json();
+                    for (const x of d) {
+                        if (x.code === 200 && x.body) mlMap.set(x.body.id, x.body);
+                    }
                 }
             }
 
             for (const hp of (db.products || [])) {
-                const candidateSkus = [hp.id, hp.sku, ...(hp.externalIds || [])].filter(Boolean).map(x => String(x).trim());
-                let matchedSt = null;
-                for (const cSku of candidateSkus) {
-                    if (blingStockMap.has(cSku)) {
-                        matchedSt = blingStockMap.get(cSku);
-                        break;
+                if (!isFilRoll(hp.name)) {
+                    if (hp.stock === undefined || hp.stock === null) {
+                        hp.stock = 0;
+                        fixedStockCount++;
                     }
+                    continue;
                 }
-                if (matchedSt !== null && hp.stock !== matchedSt) {
-                    details.push(`📦 Estoque alinhado [${hp.id}] "${(hp.name || '').slice(0, 40)}": Hub ${hp.stock} → Bling ${matchedSt}`);
-                    hp.stock = matchedSt;
-                    fixedStockCount++;
-                } else if (hp.stock === undefined || hp.stock === null) {
-                    hp.stock = 0;
-                    fixedStockCount++;
+                const cIds = Array.from(new Set([hp.id, hp.sku, ...(hp.externalIds || [])].filter(id => String(id || '').startsWith('MLB'))));
+                const activeMatches = cIds.map(id => mlMap.get(id)).filter(it => it && it.status === 'active');
+
+                if (activeMatches.length > 0) {
+                    const minActiveSt = Math.min(...activeMatches.map(it => parseInt(it.available_quantity) || 0));
+                    // Se houver anúncio gêmeo ativo com estoque maior que o irmão que vendeu, equaliza no ML!
+                    for (const actIt of activeMatches) {
+                        if ((parseInt(actIt.available_quantity) || 0) !== minActiveSt) {
+                            await fetch(`https://api.mercadolibre.com/items/${actIt.id}`, {
+                                method: 'PUT',
+                                headers: { 'Authorization': `Bearer ${mlToken}`, 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ available_quantity: minActiveSt })
+                            });
+                            details.push(`🔄 Gêmeo ML equalizado [${actIt.id}]: ${actIt.available_quantity} → ${minActiveSt} un`);
+                            fixedStockCount++;
+                        }
+                    }
+                    if (hp.stock !== minActiveSt) {
+                        details.push(`📦 Estoque Hub alinhado ao ML [${hp.id}] "${(hp.name || '').slice(0, 38)}": ${hp.stock} → ${minActiveSt} un`);
+                        hp.stock = minActiveSt;
+                        fixedStockCount++;
+                    }
+                } else if (cIds.some(id => mlMap.has(id))) {
+                    if (hp.stock !== 0) {
+                        details.push(`📦 Anúncio pausado no ML [${hp.id}] "${(hp.name || '').slice(0, 38)}": Hub ${hp.stock} → 0 un`);
+                        hp.stock = 0;
+                        fixedStockCount++;
+                    }
                 }
             }
         }
@@ -3699,19 +3725,19 @@ async function runSystemGuardianAudit() {
                 id: `log_guardian_${Date.now()}`,
                 timestamp: new Date().toLocaleTimeString('pt-BR'),
                 type: 'info',
-                message: `🛡️ [AGENTE GUARDIÃO] Auto-correção concluída: ${fixedStockCount} estoque(s) e ${fixedSalesCount} venda(s) alinhados entre ML, Bling e Hub.`
+                message: `🛡️ [AGENTE GUARDIÃO] Auto-correção concluída: ${fixedStockCount} estoque(s) e ${fixedSalesCount} venda(s) alinhados com o Mercado Livre.`
             });
             await saveDb(db);
         }
 
         global.lastGuardianReport = {
             lastRunAt: new Date().toISOString(),
-            status: (fixedStockCount > 0 || fixedSalesCount > 0) ? 'CORRIGIDO AUTOMATICAMENTE' : '100% ALINHADO',
+            status: (fixedStockCount > 0 || fixedSalesCount > 0) ? 'CORRIGIDO AUTOMATICAMENTE' : '100% ALINHADO COM ML',
             mlStatus,
             blingStatus,
             hubStatus,
             checkedProducts: (db.products || []).length,
-            blingProductsCount: allBlingProds.length,
+            blingProductsCount: mlMap.size,
             checkedSales: (db.sales || []).length,
             fixedStockCount,
             fixedSalesCount,
