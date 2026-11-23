@@ -3304,6 +3304,21 @@ app.listen(PORT, () => {
 
 
 
+app.get('/api/guardian/status', (req, res) => {
+    res.json({ success: true, report: global.lastGuardianReport });
+});
+
+app.post('/api/guardian/audit', async (req, res) => {
+    try {
+        // Dispara sync do Bling em background sem travar a resposta rápida da auditoria
+        syncBlingOrdersCore().catch(err => console.error('[GUARDIAN BLING BG]', err.message));
+        const report = await runSystemGuardianAudit();
+        res.json({ success: true, report });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
 app.use((req, res) => {
     res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
@@ -3752,19 +3767,7 @@ async function runSystemGuardianAudit() {
     }
 }
 
-app.get('/api/guardian/status', (req, res) => {
-    res.json({ success: true, report: global.lastGuardianReport });
-});
 
-app.post('/api/guardian/audit', async (req, res) => {
-    try {
-        await syncBlingOrdersCore();
-        const report = await runSystemGuardianAudit();
-        res.json({ success: true, report });
-    } catch (e) {
-        res.status(500).json({ success: false, error: e.message });
-    }
-});
 
 // Executa o Agente Guardião automaticamente a cada 10 minutos
 setInterval(() => {
