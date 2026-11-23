@@ -448,7 +448,18 @@ app.post('/api/data', async (req, res) => {
             mergedSales.push(s); // Novas vendas manuais
         }
         mergedSales.sort((a, b) => new Date(b.date) - new Date(a.date));
-        let mergedProducts = (newData.products && newData.products.length > 0) ? newData.products : currentData.products;
+        // Preservar o saldo de estoque (stock) atualizado pelo servidor em background (Bling / ML Auto-Sync)
+        const currentProductsById = new Map((currentData.products || []).map(p => [p.id, p]));
+        let mergedProducts = (newData.products && newData.products.length > 0)
+            ? newData.products.map(p => {
+                const curr = currentProductsById.get(p.id);
+                return (curr && curr.stock !== undefined) ? { ...p, stock: curr.stock } : p;
+            })
+            : (currentData.products || []);
+        const incomingProdIds = new Set((newData.products || []).map(p => p.id));
+        for (const cp of (currentData.products || [])) {
+            if (!incomingProdIds.has(cp.id)) mergedProducts.push(cp);
+        }
         
         const mergedFilaments = (newData.filaments && newData.filaments.length > 0) ? newData.filaments : currentData.filaments;
         const mergedSuppliers = (newData.suppliers && newData.suppliers.length > 0) ? newData.suppliers : currentData.suppliers;
@@ -2869,14 +2880,72 @@ async function syncBlingOrdersCore() {
             }
         }
 
-        if (newSalesCount > 0 || updatedCount > 0) {
+        // Sincronizar saldo real de estoque (estoque.saldoVirtualTotal) diretamente do Bling ERP
+        // Executa sempre que houver nova venda/atualização ou a cada 10 minutos
+        let stockSyncedCount = 0;
+        if (newSalesCount > 0 || updatedCount > 0 || !global.lastBlingStockSyncAt || (Date.now() - global.lastBlingStockSyncAt > 10 * 60 * 1000)) {
+            try {
+                let allBlingProds = [];
+                let bPage = 1;
+                while (bPage <= 12) {
+                    const pRes = await fetch(`https://api.bling.com.br/Api/v3/produtos?pagina=${bPage}&limite=100`, {
+                        headers: { 'Authorization': `Bearer ${accessToken}`, 'Accept': 'application/json' }
+                    });
+                    if (!pRes.ok) break;
+                    const pData = await pRes.json();
+                    const pList = pData.data || [];
+                    allBlingProds.push(...pList);
+                    if (pList.length < 100) break;
+                    bPage++;
+                    await new Promise(r => setTimeout(r, 380));
+                }
+                if (allBlingProds.length > 0) {
+                    const blingStockMap = new Map();
+                    for (const bp of allBlingProds) {
+                        const sku = String(bp.codigo || '').trim();
+                        if (!sku) continue;
+                        const st = Math.max(0, parseInt(bp.estoque?.saldoVirtualTotal) || 0);
+                        if (!blingStockMap.has(sku) || st > blingStockMap.get(sku)) {
+                            blingStockMap.set(sku, st);
+                        }
+                    }
+                    for (const hp of (db.products || [])) {
+                        const candidateSkus = [hp.id, hp.sku, ...(hp.externalIds || [])].filter(Boolean).map(x => String(x).trim());
+                        let matchedSt = null;
+                        for (const cSku of candidateSkus) {
+                            if (blingStockMap.has(cSku)) {
+                                matchedSt = blingStockMap.get(cSku);
+                                break;
+                            }
+                        }
+                        if (matchedSt !== null && hp.stock !== matchedSt) {
+                            hp.stock = matchedSt;
+                            stockSyncedCount++;
+                        } else if (hp.stock === undefined || hp.stock === null) {
+                            hp.stock = 0;
+                            stockSyncedCount++;
+                        }
+                    }
+                    global.lastBlingStockSyncAt = Date.now();
+                    if (stockSyncedCount > 0) {
+                        console.log(`[BLING STOCK SYNC] ${stockSyncedCount} produto(s) tiveram estoque alinhado com o Bling ERP.`);
+                    }
+                }
+            } catch (stockErr) {
+                console.error("[BLING STOCK SYNC] Erro ao sincronizar estoque do Bling:", stockErr.message);
+            }
+        }
+
+        if (newSalesCount > 0 || updatedCount > 0 || stockSyncedCount > 0) {
             db.integrationLogs = db.integrationLogs || [];
-            db.integrationLogs.push({
-                id: Date.now().toString(),
-                date: new Date().toISOString(),
-                type: 'info',
-                message: `Sincronização do Bling concluída: ${newSalesCount} novas vendas importadas, ${updatedCount} atualizadas (Total de ${orders.length} pedidos no Bling).`
-            });
+            if (newSalesCount > 0 || updatedCount > 0) {
+                db.integrationLogs.push({
+                    id: Date.now().toString(),
+                    date: new Date().toISOString(),
+                    type: 'info',
+                    message: `Sincronização do Bling concluída: ${newSalesCount} novas vendas importadas, ${updatedCount} atualizadas, ${stockSyncedCount} estoques alinhados (Total de ${orders.length} pedidos no Bling).`
+                });
+            }
             await saveDb(db);
         }
         console.log(`[BLING SYNC] Concluído! ${newSalesCount} novas vendas adicionadas.`);
@@ -3358,14 +3427,20 @@ async function pollMercadoLivreOrders() {
                     }
                 }
 
-                // Verifica se o produto existe no catálogo
-                let product = freshDb.products.find(p => p.id === productId || p.name.toLowerCase() === productName.toLowerCase());
+                // Verifica se o produto existe no catálogo (incluindo externalIds de anúncios gêmeos e SKU)
+                let product = freshDb.products.find(p =>
+                    p.id === productId ||
+                    p.sku === productId ||
+                    (p.externalIds && p.externalIds.includes(productId)) ||
+                    (p.name && p.name.toLowerCase() === productName.toLowerCase())
+                );
                 if (!product) {
                     const guessedType = productName.toLowerCase().includes('filamento') || productName.toLowerCase().includes('bico') ? 'resale' : '3d';
                     product = {
                         id: productId,
                         name: productName,
                         type: guessedType,
+                        stock: 0,
                         weight: guessedType === '3d' ? 100 : 0,
                         printTime: guessedType === '3d' ? 5.0 : 0,
                         filamentCost: 95.00,
