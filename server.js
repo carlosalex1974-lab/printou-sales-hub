@@ -448,18 +448,18 @@ app.post('/api/data', async (req, res) => {
             mergedSales.push(s); // Novas vendas manuais
         }
         mergedSales.sort((a, b) => new Date(b.date) - new Date(a.date));
-        // Preservar o saldo de estoque (stock) atualizado pelo servidor em background (Bling / ML Auto-Sync)
-        const currentProductsById = new Map((currentData.products || []).map(p => [p.id, p]));
-        let mergedProducts = (newData.products && newData.products.length > 0)
-            ? newData.products.map(p => {
-                const curr = currentProductsById.get(p.id);
-                return (curr && curr.stock !== undefined) ? { ...p, stock: curr.stock } : p;
-            })
-            : (currentData.products || []);
-        const incomingProdIds = new Set((newData.products || []).map(p => p.id));
-        for (const cp of (currentData.products || [])) {
-            if (!incomingProdIds.has(cp.id)) mergedProducts.push(cp);
-        }
+        // Preservar a lista unificada de produtos e o saldo de estoque (stock) do servidor (evita reinserir anúncios gêmeos já unificados)
+        const incomingProductsById = new Map((newData.products || []).map(p => [p.id, p]));
+        let mergedProducts = (currentData.products || []).map(cp => {
+            const inc = incomingProductsById.get(cp.id);
+            if (!inc) return cp;
+            return {
+                ...cp,
+                ...inc,
+                stock: cp.stock !== undefined ? cp.stock : inc.stock,
+                externalIds: Array.from(new Set([...(cp.externalIds || []), ...(inc.externalIds || [])]))
+            };
+        });
         
         const mergedFilaments = (newData.filaments && newData.filaments.length > 0) ? newData.filaments : currentData.filaments;
         const mergedSuppliers = (newData.suppliers && newData.suppliers.length > 0) ? newData.suppliers : currentData.suppliers;
