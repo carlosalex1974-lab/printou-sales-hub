@@ -681,6 +681,26 @@
                 return local ? JSON.parse(local) : [];
             });
             const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+            const [isGuardianRunning, setIsGuardianRunning] = useState(false);
+            const [guardianModalReport, setGuardianModalReport] = useState(null);
+
+            const handleRunGuardian = async () => {
+                setIsGuardianRunning(true);
+                try {
+                    const res = await fetch('/api/guardian/audit', { method: 'POST' });
+                    const data = await res.json();
+                    if (data.success && data.report) {
+                        setGuardianModalReport(data.report);
+                        await refreshDatabaseData();
+                    } else {
+                        alert('Aviso Guardião: ' + (data.error || 'Falha ao executar auditoria.'));
+                    }
+                } catch (e) {
+                    alert('Erro ao conectar com o Agente Guardião no servidor.');
+                } finally {
+                    setIsGuardianRunning(false);
+                }
+            };
             const [theme, setTheme] = useState(() => {
                 const saved = localStorage.getItem('printou_theme_v2');
                 return saved || 'boss';
@@ -1423,6 +1443,15 @@
                                             <span className="boss-status-dot"></span>
                                             HUB ONLINE
                                         </span>
+                                        <button
+                                            type="button"
+                                            onClick={handleRunGuardian}
+                                            disabled={isGuardianRunning}
+                                            className="boss-status-pill hover:bg-emerald-500/20 cursor-pointer transition-all"
+                                            title="Agente Guardião 24/7: Clique para auditar e alinhar Mercado Livre, Bling ERP e Printou Hub agora"
+                                        >
+                                            <span>{isGuardianRunning ? '🔄 AUDITANDO ML • BLING • HUB...' : '🛡️ GUARDIÃO ML • BLING • HUB'}</span>
+                                        </button>
                                     </div>
                                     <h2 className="text-2xl lg:text-3xl font-extrabold text-white">Controle Central de Vendas</h2>
                                 </div>
@@ -1462,6 +1491,54 @@
                                 </button>
                             </div>
                         </header>
+
+                        {guardianModalReport && (
+                            <div className="mb-6 glass-panel p-5 rounded-2xl border border-emerald-500/40 animate-fade-in">
+                                <div className="flex justify-between items-center mb-3 pb-2 border-b border-white/10">
+                                    <div className="flex items-center gap-2">
+                                        <span className="boss-status-dot"></span>
+                                        <h4 className="font-extrabold text-white text-sm uppercase tracking-wider">
+                                            🛡️ Relatório do Agente Guardião — {guardianModalReport.status}
+                                        </h4>
+                                    </div>
+                                    <button
+                                        onClick={() => setGuardianModalReport(null)}
+                                        className="text-xs text-gray-400 hover:text-white font-bold px-2 py-1 rounded bg-white/5"
+                                    >
+                                        Fechar ✕
+                                    </button>
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-xs mb-3">
+                                    <div className="glass-card p-3 rounded-xl">
+                                        <span className="text-gray-400 block text-[10px] uppercase">Mercado Livre</span>
+                                        <span className="font-extrabold text-emerald-400">{guardianModalReport.mlStatus}</span>
+                                    </div>
+                                    <div className="glass-card p-3 rounded-xl">
+                                        <span className="text-gray-400 block text-[10px] uppercase">Bling ERP</span>
+                                        <span className="font-extrabold text-emerald-400">{guardianModalReport.blingStatus} ({guardianModalReport.blingProductsCount || 0} itens)</span>
+                                    </div>
+                                    <div className="glass-card p-3 rounded-xl">
+                                        <span className="text-gray-400 block text-[10px] uppercase">Produtos no Hub</span>
+                                        <span className="font-extrabold text-white">{guardianModalReport.checkedProducts} verificados</span>
+                                    </div>
+                                    <div className="glass-card p-3 rounded-xl">
+                                        <span className="text-gray-400 block text-[10px] uppercase">Estoques Corrigidos</span>
+                                        <span className="font-extrabold text-amber-400">{guardianModalReport.fixedStockCount} ajustados</span>
+                                    </div>
+                                    <div className="glass-card p-3 rounded-xl">
+                                        <span className="text-gray-400 block text-[10px] uppercase">Vendas Auditadas</span>
+                                        <span className="font-extrabold text-white">{guardianModalReport.checkedSales} ({guardianModalReport.fixedSalesCount} ajustes)</span>
+                                    </div>
+                                </div>
+                                {guardianModalReport.details && guardianModalReport.details.length > 0 && (
+                                    <div className="bg-black/40 border border-white/10 rounded-xl p-3 max-h-40 overflow-y-auto text-xs space-y-1 font-mono text-gray-300">
+                                        {guardianModalReport.details.map((d, idx) => (
+                                            <div key={idx}>{d}</div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                         {/* Banner de aviso para itens pendentes */}
                         {products.filter(p => p.isPendingConfig).length > 0 && (

@@ -3584,3 +3584,166 @@ async function pollCancelledOrders() {
 // ==========================================
 // TIKTOK SHOP INTEGRATION
 // ==========================================
+
+
+// ==========================================
+// 🛡️ AGENTE GUARDIÃO (ML ↔ BLING ↔ PRINTOU HUB)
+// Monitoramento contínuo e auto-correção 24/7
+// ==========================================
+global.lastGuardianReport = {
+    lastRunAt: null,
+    status: 'aguardando',
+    mlStatus: 'OK',
+    blingStatus: 'OK',
+    hubStatus: 'OK',
+    checkedProducts: 0,
+    checkedSales: 0,
+    fixedStockCount: 0,
+    fixedSalesCount: 0,
+    details: []
+};
+
+async function runSystemGuardianAudit() {
+    const details = [];
+    let fixedStockCount = 0;
+    let fixedSalesCount = 0;
+    let mlStatus = 'OK';
+    let blingStatus = 'OK';
+    let hubStatus = 'OK';
+
+    try {
+        const db = await readDb();
+
+        // 1. Verificar Tokens OAuth (Mercado Livre e Bling)
+        const mlToken = await getValidAccessToken('mercadolivre', db);
+        if (!mlToken) {
+            mlStatus = 'ALERTA: Token ML indisponível';
+            details.push('⚠️ Token do Mercado Livre não pôde ser validado.');
+        }
+
+        const blingToken = await getValidBlingToken(db);
+        if (!blingToken) {
+            blingStatus = 'ALERTA: Token Bling indisponível';
+            details.push('⚠️ Token do Bling ERP não pôde ser validado.');
+        }
+
+        // 2. Auditar e Alinhar Estoque Bling ERP (saldoVirtualTotal) ↔ Hub (db.products)
+        let allBlingProds = [];
+        if (blingToken) {
+            let bPage = 1;
+            while (bPage <= 12) {
+                const pRes = await fetch(`https://api.bling.com.br/Api/v3/produtos?pagina=${bPage}&limite=100`, {
+                    headers: { 'Authorization': `Bearer ${blingToken}`, 'Accept': 'application/json' }
+                });
+                if (!pRes.ok) break;
+                const pData = await pRes.json();
+                const pList = pData.data || [];
+                allBlingProds.push(...pList);
+                if (pList.length < 100) break;
+                bPage++;
+                await new Promise(r => setTimeout(r, 350));
+            }
+        }
+
+        if (allBlingProds.length > 0) {
+            const blingStockMap = new Map();
+            for (const bp of allBlingProds) {
+                const sku = String(bp.codigo || '').trim();
+                if (!sku) continue;
+                const st = Math.max(0, parseInt(bp.estoque?.saldoVirtualTotal) || 0);
+                if (!blingStockMap.has(sku) || st > blingStockMap.get(sku)) {
+                    blingStockMap.set(sku, st);
+                }
+            }
+
+            for (const hp of (db.products || [])) {
+                const candidateSkus = [hp.id, hp.sku, ...(hp.externalIds || [])].filter(Boolean).map(x => String(x).trim());
+                let matchedSt = null;
+                for (const cSku of candidateSkus) {
+                    if (blingStockMap.has(cSku)) {
+                        matchedSt = blingStockMap.get(cSku);
+                        break;
+                    }
+                }
+                if (matchedSt !== null && hp.stock !== matchedSt) {
+                    details.push(`📦 Estoque alinhado [${hp.id}] "${(hp.name || '').slice(0, 40)}": Hub ${hp.stock} → Bling ${matchedSt}`);
+                    hp.stock = matchedSt;
+                    fixedStockCount++;
+                } else if (hp.stock === undefined || hp.stock === null) {
+                    hp.stock = 0;
+                    fixedStockCount++;
+                }
+            }
+        }
+
+        // 3. Auditar Integridade das Vendas (Frete TikTok = 0, Comissão Afiliado 8% em Filamentos TikTok)
+        for (const s of (db.sales || [])) {
+            if (s.channelId === 'tiktok') {
+                if (parseFloat(s.shipping) > 0) {
+                    s.shipping = 0;
+                    fixedSalesCount++;
+                }
+                const prod = (db.products || []).find(p => p.id === s.productId || (p.externalIds && p.externalIds.includes(s.productId)));
+                const isFil = (prod && prod.type === 'resale') || /filamento|\bpla\b|petg|\babs\b|\btpu\b|\basa\b|elegoo|fusionx|soleyin/i.test(`${prod?.name || ''} ${s.notes || ''}`);
+                if (s.isAffiliate === undefined) {
+                    s.isAffiliate = isFil;
+                    s.affiliateRate = isFil ? 8 : 0;
+                    fixedSalesCount++;
+                }
+            }
+        }
+
+        if (fixedStockCount > 0 || fixedSalesCount > 0) {
+            db.integrationLogs = db.integrationLogs || [];
+            db.integrationLogs.push({
+                id: `log_guardian_${Date.now()}`,
+                timestamp: new Date().toLocaleTimeString('pt-BR'),
+                type: 'info',
+                message: `🛡️ [AGENTE GUARDIÃO] Auto-correção concluída: ${fixedStockCount} estoque(s) e ${fixedSalesCount} venda(s) alinhados entre ML, Bling e Hub.`
+            });
+            await saveDb(db);
+        }
+
+        global.lastGuardianReport = {
+            lastRunAt: new Date().toISOString(),
+            status: (fixedStockCount > 0 || fixedSalesCount > 0) ? 'CORRIGIDO AUTOMATICAMENTE' : '100% ALINHADO',
+            mlStatus,
+            blingStatus,
+            hubStatus,
+            checkedProducts: (db.products || []).length,
+            blingProductsCount: allBlingProds.length,
+            checkedSales: (db.sales || []).length,
+            fixedStockCount,
+            fixedSalesCount,
+            details: details.slice(0, 30)
+        };
+
+        return global.lastGuardianReport;
+    } catch (err) {
+        console.error('[GUARDIAN AGENT] Erro na auditoria:', err.message);
+        global.lastGuardianReport.status = 'ERRO: ' + err.message;
+        return global.lastGuardianReport;
+    }
+}
+
+app.get('/api/guardian/status', (req, res) => {
+    res.json({ success: true, report: global.lastGuardianReport });
+});
+
+app.post('/api/guardian/audit', async (req, res) => {
+    try {
+        await syncBlingOrdersCore();
+        const report = await runSystemGuardianAudit();
+        res.json({ success: true, report });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// Executa o Agente Guardião automaticamente a cada 10 minutos
+setInterval(() => {
+    runSystemGuardianAudit().catch(err => console.error('[GUARDIAN INTERVAL]', err.message));
+}, 10 * 60 * 1000);
+setTimeout(() => {
+    runSystemGuardianAudit().catch(err => console.error('[GUARDIAN STARTUP]', err.message));
+}, 15000);
