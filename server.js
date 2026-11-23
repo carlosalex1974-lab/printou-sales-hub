@@ -3645,7 +3645,7 @@ async function runSystemGuardianAudit() {
             details.push('⚠️ Token do Mercado Livre não pôde ser validado.');
         }
 
-        const blingToken = await getValidBlingToken(db);
+        const blingToken = await getBlingValidAccessToken().catch(() => null);
         if (!blingToken) {
             blingStatus = 'ALERTA: Token Bling indisponível';
             details.push('⚠️ Token do Bling ERP não pôde ser validado.');
