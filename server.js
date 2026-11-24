@@ -3037,7 +3037,7 @@ app.post('/api/bling/sync-products', async (req, res) => {
         let allBlingProducts = [];
         let hasMore = true;
 
-        while (hasMore && page <= 5) {
+        while (hasMore && page <= 12) {
             const bRes = await fetch(`https://api.bling.com.br/Api/v3/produtos?pagina=${page}&limite=100`, {
                 method: 'GET',
                 headers: {
@@ -3056,12 +3056,16 @@ app.post('/api/bling/sync-products', async (req, res) => {
             allBlingProducts.push(...list);
 
             if (list.length < 100) hasMore = false;
-            else page++;
+            else {
+                page++;
+                await new Promise(r => setTimeout(r, 380));
+            }
         }
 
         console.log(`[BLING SYNC PRODUCTS] ${allBlingProducts.length} produtos obtidos do Bling.`);
 
         const db = await readDb();
+        const mlToken = await getValidAccessToken('mercadolivre', db).catch(() => null);
         db.products = db.products || [];
         let updatedCount = 0;
         let newCount = 0;
@@ -3072,12 +3076,13 @@ app.post('/api/bling/sync-products', async (req, res) => {
             const blingName = String(bp.nome || '').trim();
             const cost = parseFloat(bp.precoCusto) || parseFloat(bp.fornecedor?.precoCusto) || parseFloat(bp.fornecedor?.precoCompra) || 0;
             const price = parseFloat(bp.preco) || 0;
-            const stock = parseInt(bp.estoque?.saldoFisicoTotal ?? bp.estoque?.saldoVirtualTotal ?? 0) || 0;
+            const stock = Math.max(0, parseInt(bp.estoque?.saldoFisicoTotal ?? bp.estoque?.saldoVirtualTotal ?? 0) || 0);
 
             let existing = db.products.find(p => 
-                (blingSku && p.id === blingSku) ||
-                (blingSku && p.externalIds && p.externalIds.includes(blingSku)) ||
-                (p.id === blingId) ||
+                (blingSku && String(p.id).toUpperCase() === blingSku) ||
+                (blingSku && String(p.sku || '').toUpperCase() === blingSku) ||
+                (blingSku && p.externalIds && p.externalIds.some(e => String(e).toUpperCase() === blingSku)) ||
+                (String(p.id) === blingId) ||
                 (p.name && blingName && p.name.toLowerCase() === blingName.toLowerCase())
             );
 
@@ -3090,6 +3095,17 @@ app.post('/api/bling/sync-products', async (req, res) => {
                 if (stock > 0 && existing.stock !== stock) {
                     existing.stock = stock;
                     changed = true;
+                    // Propaga o novo estoque do Bling diretamente para todos os anúncios gêmeos no Mercado Livre!
+                    if (mlToken) {
+                        const mlbIds = Array.from(new Set([existing.id, existing.sku, blingSku, ...(existing.externalIds || [])].filter(x => String(x || '').toUpperCase().startsWith('MLB')).map(x => String(x).toUpperCase())));
+                        for (const mId of mlbIds) {
+                            await fetch(`https://api.mercadolibre.com/items/${mId}`, {
+                                method: 'PUT',
+                                headers: { 'Authorization': `Bearer ${mlToken}`, 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ available_quantity: stock })
+                            }).catch(() => {});
+                        }
+                    }
                 }
                 if (price > 0 && (!existing.price || existing.price === 0)) {
                     existing.price = price;
