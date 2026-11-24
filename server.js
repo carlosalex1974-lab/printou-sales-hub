@@ -345,7 +345,25 @@ app.post('/api/mutate', async (req, res) => {
                 }
             } else if (action === 'update') {
                 const targetId = id || (payload && payload.id);
+                const oldItem = db[collection].find(item => item.id === targetId);
                 db[collection] = db[collection].map(item => item.id === targetId ? { ...item, ...payload } : item);
+                // Se o estoque de um produto foi alterado manualmente no Hub, propaga para os anúncios ativos no Mercado Livre
+                if (collection === 'products' && payload && payload.stock !== undefined && (!oldItem || oldItem.stock !== payload.stock)) {
+                    const newSt = Math.max(0, parseInt(payload.stock) || 0);
+                    const mlbIds = Array.from(new Set([targetId, payload.sku, oldItem?.sku, ...(payload.externalIds || []), ...(oldItem?.externalIds || [])].filter(x => String(x || '').toUpperCase().startsWith('MLB')).map(x => String(x).toUpperCase())));
+                    if (mlbIds.length > 0) {
+                        getValidAccessToken('mercadolivre', db).then(async (mlTok) => {
+                            if (!mlTok) return;
+                            for (const mId of mlbIds) {
+                                await fetch(`https://api.mercadolibre.com/items/${mId}`, {
+                                    method: 'PUT',
+                                    headers: { 'Authorization': `Bearer ${mlTok}`, 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ available_quantity: newSt })
+                                }).catch(() => {});
+                            }
+                        }).catch(() => {});
+                    }
+                }
             } else if (action === 'delete') {
                 db[collection] = db[collection].filter(item => item.id !== id);
             }
@@ -2736,7 +2754,7 @@ async function syncBlingOrdersCore() {
                         orderItems = Array.isArray(detailData.data?.itens) ? detailData.data.itens : [];
                         if (orderItems.length > 0) {
                             const firstItem = orderItems[0];
-                            itemSku = String(firstItem.codigo || '').trim();
+                            itemSku = String(firstItem.codigo || '').trim().toUpperCase();
                             itemQty = orderItems.reduce((sum, it) => sum + (parseInt(it.quantidade) || 1), 0) || 1;
                             if (orderItems.length === 1) {
                                 itemDesc = firstItem.descricao || '';
@@ -3049,7 +3067,7 @@ app.post('/api/bling/sync-products', async (req, res) => {
         let newCount = 0;
 
         for (const bp of allBlingProducts) {
-            const blingSku = String(bp.codigo || '').trim();
+            const blingSku = String(bp.codigo || '').trim().toUpperCase();
             const blingId = String(bp.id);
             const blingName = String(bp.nome || '').trim();
             const cost = parseFloat(bp.precoCusto) || parseFloat(bp.fornecedor?.precoCusto) || parseFloat(bp.fornecedor?.precoCompra) || 0;

@@ -6972,7 +6972,9 @@
                         };
                         setStockMovements(prev => [movement, ...prev]);
 
-                        setProducts(prevProds => prevProds.map(p => p.id === id ? { ...p, stock: val } : p));
+                        const updatedProd = { ...prodInfo, stock: val };
+                        mutateServer('products', 'update', updatedProd, id);
+                        setProducts(prevProds => prevProds.map(p => p.id === id ? updatedProd : p));
                     }
                 }
             };
@@ -7031,8 +7033,11 @@
             const filteredProducts = useMemo(() => {
                 return products.filter(prod => {
                     const name = (prod.name || '').toLowerCase();
-                    const matchesSearch = name.includes(search.toLowerCase()) || 
-                                          (prod.id || '').toLowerCase().includes(search.toLowerCase());
+                    const q = search.toLowerCase().trim();
+                    const matchesSearch = name.includes(q) || 
+                                          (prod.id || '').toLowerCase().includes(q) ||
+                                          (prod.sku || '').toLowerCase().includes(q) ||
+                                          (Array.isArray(prod.externalIds) && prod.externalIds.some(ext => String(ext).toLowerCase().includes(q)));
                     const isFilament = name.includes('filamento') || name.includes('refil');
                     const isPart = prod.type === 'resale' && !isFilament;
                     const is3D = prod.type === '3d';
